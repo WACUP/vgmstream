@@ -25,7 +25,15 @@
 #ifndef AVUTIL_BUFFER_H
 #define AVUTIL_BUFFER_H
 
+#ifdef _MSC_VER
+#if (_MSC_VER >= 1600)
 #include <stdint.h>
+#else
+#include <pstdint.h>
+#endif
+#else
+#include <stdint.h>
+#endif
 
 /**
  * @defgroup lavu_buffer AVBuffer

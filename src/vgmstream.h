@@ -5,6 +5,10 @@
 #ifndef _VGMSTREAM_H
 #define _VGMSTREAM_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 enum { PATH_LIMIT = 32768 };
 enum { STREAM_NAME_SIZE = 255 }; /* reasonable max */
 
@@ -1326,5 +1330,9 @@ int vgmstream_open_stream(VGMSTREAM * vgmstream, STREAMFILE *streamFile, off_t s
 const char * get_vgmstream_coding_description(coding_t coding_type);
 const char * get_vgmstream_layout_description(layout_t layout_type);
 const char * get_vgmstream_meta_description(meta_t meta_type);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

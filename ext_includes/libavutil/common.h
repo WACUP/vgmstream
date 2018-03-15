@@ -38,7 +38,15 @@
 /* end modification */
 #include <limits.h>
 #include <math.h>
+#ifdef _MSC_VER
+#if (_MSC_VER >= 1600)
 #include <stdint.h>
+#else
+#include <pstdint.h>
+#endif
+#else
+#include <stdint.h>
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
