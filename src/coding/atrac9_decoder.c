@@ -1,4 +1,7 @@
 #include "coding.h"
+#ifdef _MSC_VER
+#include <excpt.h>
+#endif
 
 #ifdef VGM_USE_ATRAC9
 #include "libatrac9.h"
@@ -12,7 +15,15 @@ atrac9_codec_data *init_atrac9(atrac9_config *cfg) {
 
     data = calloc(1, sizeof(atrac9_codec_data));
 
+#ifdef _MSC_VER
+	__try {
+#endif
     data->handle = Atrac9GetHandle();
+#ifdef _MSC_VER
+	}
+	__except (EXCEPTION_EXECUTE_HANDLER) {
+	}
+#endif
     if (!data->handle) goto fail;
 
     put_32bitBE(config_data, cfg->config_data);

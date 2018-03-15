@@ -1,5 +1,8 @@
 #include "coding.h"
 #include "../util.h"
+#ifdef _MSC_VER
+#include <excpt.h>
+#endif
 
 #ifdef VGM_USE_G719
 #include "../stack_alloc.h"
@@ -12,7 +15,15 @@ g719_codec_data *init_g719(int channel_count, int frame_size) {
     if (!data) goto fail;
 
     for (i = 0; i < channel_count; i++) {
+#ifdef _MSC_VER
+		__try {
+#endif
         data[i].handle = g719_init(frame_size); /* Siren 22 == 22khz bandwidth */
+#ifdef _MSC_VER
+		}
+		__except (EXCEPTION_EXECUTE_HANDLER) {
+		}
+#endif
         if (!data[i].handle) goto fail;
     }
 

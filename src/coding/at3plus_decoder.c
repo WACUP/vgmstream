@@ -1,5 +1,8 @@
 #include "coding.h"
 #include "../util.h"
+#ifdef _MSC_VER
+#include <excpt.h>
+#endif
 
 #ifdef VGM_USE_MAIATRAC3PLUS
 #include "maiatrac3plus.h"
@@ -9,7 +12,15 @@ maiatrac3plus_codec_data *init_at3plus() {
     maiatrac3plus_codec_data *data = malloc(sizeof(maiatrac3plus_codec_data));
     data->buffer = 0;
     data->samples_discard = 0;
+#ifdef _MSC_VER
+	__try {
+#endif
     data->handle = Atrac3plusDecoder_openContext();
+#ifdef _MSC_VER
+	}
+	__except (EXCEPTION_EXECUTE_HANDLER) {
+	}
+#endif
     if (!data->handle) goto fail;
 
     return data;

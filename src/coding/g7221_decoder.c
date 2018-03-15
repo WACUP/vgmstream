@@ -1,5 +1,8 @@
 #include "coding.h"
 #include "../util.h"
+#ifdef _MSC_VER
+#include <excpt.h>
+#endif
 
 #ifdef VGM_USE_G7221
 
@@ -11,7 +14,15 @@ g7221_codec_data * init_g7221(int channel_count, int frame_size) {
     if (!data) goto fail;
 
     for (i = 0; i < channel_count; i++) {
+#ifdef _MSC_VER
+		__try {
+#endif
         data[i].handle = g7221_init(frame_size, 14000); /* Siren 14 == 14khz bandwidth */
+#ifdef _MSC_VER
+		}
+		__except (EXCEPTION_EXECUTE_HANDLER) {
+		}
+#endif
         if (!data[i].handle) goto fail;
     }
 

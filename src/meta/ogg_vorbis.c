@@ -5,6 +5,9 @@
 #include <string.h>
 #include "meta.h"
 #include <vorbis/vorbisfile.h>
+#ifdef _MSC_VER
+#include <excpt.h>
+#endif
 
 #define OGG_DEFAULT_BITSTREAM 0
 
@@ -335,8 +338,18 @@ VGMSTREAM * init_vgmstream_ogg_vorbis_callbacks(STREAMFILE *streamFile, const ch
 
         /* open the ogg vorbis file for testing */
         memset(&temp_ovf, 0, sizeof(temp_ovf));
+
+#ifdef _MSC_VER
+		__try {
+#endif
         if (ov_test_callbacks(&temp_streamfile, &temp_ovf, NULL, 0, *callbacks_p))
             goto fail;
+#ifdef _MSC_VER
+		}
+		__except (EXCEPTION_EXECUTE_HANDLER) {
+			goto fail;
+		}
+#endif
 
         /* we have to close this as it has the init_vgmstream meta-reading STREAMFILE */
         ov_clear(&temp_ovf);

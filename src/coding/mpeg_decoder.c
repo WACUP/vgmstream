@@ -1,6 +1,9 @@
 #include "coding.h"
 #include "../util.h"
 #include "../vgmstream.h"
+#ifdef _MSC_VER
+#include <excpt.h>
+#endif
 
 #ifdef VGM_USE_MPEG
 #include <mpg123.h>
@@ -177,10 +180,19 @@ fail:
 
 static mpg123_handle * init_mpg123_handle() {
     mpg123_handle *m = NULL;
-    int rc;
+    int rc = MPG123_ERR;
 
     /* inits a new mpg123 handle */
+#ifdef _MSC_VER
+	__try {
+#endif
     m = mpg123_new(NULL,&rc);
+#ifdef _MSC_VER
+	}
+	__except (EXCEPTION_EXECUTE_HANDLER) {
+	}
+#endif
+
     if (rc == MPG123_NOT_INITIALIZED) {
         /* inits the library if needed */
         if (mpg123_init() != MPG123_OK)
