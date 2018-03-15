@@ -41,11 +41,11 @@ static size_t get_offset_bar(BARSTREAMFILE *streamFile) {
 }
 
 static void get_name_bar(BARSTREAMFILE *streamFile, char *name, size_t length) {
-    return streamFile->real_file->get_name(streamFile->real_file, name, length);
+    streamFile->real_file->get_name(streamFile->real_file, name, length);
 }
 
 static void get_realname_bar(BARSTREAMFILE *streamFile, char *name, size_t length) {
-    return streamFile->real_file->get_realname(streamFile->real_file, name, length);
+    streamFile->real_file->get_realname(streamFile->real_file, name, length);
 }
 
 STREAMFILE *open_bar(BARSTREAMFILE *streamFile, const char * const filename, size_t buffersize) {
