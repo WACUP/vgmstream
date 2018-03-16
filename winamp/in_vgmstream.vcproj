@@ -63,6 +63,7 @@
 				Name="VCLinkerTool"
 				AdditionalDependencies="../ext_libs/libvorbis.lib ../ext_libs/libmpg123-0.lib ../ext_libs/libg7221_decode.lib ../ext_libs/libg719_decode.lib"
 				LinkIncremental="2"
+				ModuleDefinitionFile="in_vgmstream.def"
 				GenerateDebugInformation="true"
 				SubSystem="2"
 				RandomizedBaseAddress="1"
@@ -96,6 +97,8 @@
 			OutputDirectory="Release"
 			IntermediateDirectory="Release"
 			ConfigurationType="2"
+			CharacterSet="1"
+			WholeProgramOptimization="1"
 			>
 			<Tool
 				Name="VCPreBuildEventTool"
@@ -140,8 +143,6 @@
 				SubSystem="2"
 				OptimizeReferences="2"
 				EnableCOMDATFolding="2"
-				RandomizedBaseAddress="1"
-				DataExecutionPrevention="0"
 				TargetMachine="1"
 			/>
 			<Tool
@@ -185,6 +186,10 @@
 			Filter="rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx"
 			UniqueIdentifier="{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}"
 			>
+			<File
+				RelativePath=".\in_vgmstream.def"
+				>
+			</File>
 			<File
 				RelativePath=".\resource.rc"
 				>

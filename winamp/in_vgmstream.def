@@ -1,0 +1,12 @@
+LIBRARY	"in_vgmstream"
+EXPORTS
+winampGetInModule2 @1
+winampGetExtendedFileInfoW @2
+winampAddUnifiedFileInfoPane @3
+winampUseUnifiedFileInfoDlg @4
+;winampGetExtendedRead_close @5
+;winampGetExtendedRead_getData @6
+;winampGetExtendedRead_openW @7
+;winampGetExtendedRead_openW_float @8
+;winampGetExtendedRead_setTime @9
+winampUninstallPlugin @10
