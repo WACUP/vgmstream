@@ -56,7 +56,7 @@ extern api_config *configApi;
 #define VERSIONW L"2.0"
 #endif
 
-#define LIBVGMSTREAM_BUILD "1050-1102-g95d9a7f5-wacup"
+#define LIBVGMSTREAM_BUILD "1050-1102-gaaedb81-wacup"
 #define APP_NAME "vgmstream plugin"
 #define PLUGIN_DESCRIPTION "vgmstream Decoder v" VERSION
 #define PLUGIN_DESCRIPTIONW L"vgmstream Decoder v" VERSIONW
@@ -1327,7 +1327,6 @@ extern "C" __declspec(dllexport) intptr_t winampGetExtendedRead_openW(const wcha
 {
 	return 0;
 }
-
 
 extern "C" __declspec(dllexport) size_t winampGetExtendedRead_getData(intptr_t handle, char *dest, size_t len, int *killswitch)
 {
