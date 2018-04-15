@@ -669,7 +669,7 @@ void about(HWND hwndParent)
     AboutMessageBox(hwndParent, PLUGIN_DESCRIPTIONW L"\n\n"
 					L"Copyright © 2008-2018 hcs, FastElbja, manakoAT, bxaimc,\n"
 					L"snakemeat, soneek, kode54, bnnm and all other contributors.\n\n"
-					L"Winamp integration updates by Darren Owen aka DrO\n\n"
+					L"WACUP integration updates by Darren Owen aka DrO\n\n"
 					L"Build date: " TEXT(__DATE__) L"\n\n"
 					L"Using libvgmstream build: " TEXT(LIBVGMSTREAM_BUILD) L"\n\n\n"
 					L"This adds support for dozens of streamed ADPCM and other\n"
