@@ -599,7 +599,7 @@ typedef enum {
     meta_FSTM,              /* Nintendo Wii U FSTM (caFe? Stream) */
     meta_3DS_IDSP,          /* Nintendo 3DS/Wii U IDSP */
     meta_KT_WIIBGM,         /* Koei Tecmo WiiBGM */
-    meta_KTSS,              /* Koei Tecmo Switch Sound */
+    meta_KTSS,              /* Koei Tecmo Nintendo Stream (KNS) */
     meta_MCA,               /* Capcom MCA "MADP" */
     meta_XB3D_ADX,          /* Xenoblade Chronicles 3D ADX */
     meta_HCA,               /* CRI HCA */
@@ -677,6 +677,8 @@ typedef enum {
     meta_OGG_YS8,           /* Ogg Vorbis with encryption (Ys VIII PC) */
     meta_PPST,              /* PPST [Parappa the Rapper (PSP)] */
     meta_OPUS_PPP,          /* .at9 Opus [Penny-Punching Princess (Switch)] */
+    meta_UBI_BAO,           /* Ubisoft BAO */
+    meta_DSP_SWITCH_AUDIO,  /* Gal Gun 2 (Switch) */
 
 #ifdef VGM_USE_FFMPEG
     meta_FFmpeg,
