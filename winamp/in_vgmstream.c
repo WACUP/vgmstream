@@ -56,7 +56,7 @@ extern api_config *configApi;
 #define VERSIONW L"2.0"
 #endif
 
-#define LIBVGMSTREAM_BUILD "1050-1102-g47d2b53-wacup"
+#define LIBVGMSTREAM_BUILD "1050-1102-g1290dfa-wacup"
 #define APP_NAME "vgmstream plugin"
 #define PLUGIN_DESCRIPTION "vgmstream Decoder v" VERSION
 #define PLUGIN_DESCRIPTIONW L"vgmstream Decoder v" VERSIONW
@@ -1111,7 +1111,7 @@ In_Module plugin = {
     0 /* outMod */
 };
 
-__declspec( dllexport ) In_Module * winampGetInModule2() {
+__declspec(dllexport) In_Module * winampGetInModule2() {
     return &plugin;
 }
 
@@ -1373,4 +1373,8 @@ FARPROC WINAPI FailHook(unsigned dliNotify, PDelayLoadInfo pdli) {
 	return 0;
 }
 
+ExternC
+#if _MSC_VER >= 1900
+const
+#endif
 PfnDliHook __pfnDliFailureHook2 = FailHook;
