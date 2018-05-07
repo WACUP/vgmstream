@@ -11,7 +11,7 @@
 #define IDC_IGNORE_LOOP                 1005
 #define IDC_DEFAULT_BUTTON              1006
 #define IDC_DISABLE_SUBSONGS            1007
-#define IDC_DOWNMIX                     1008
+#define IDC_DOWNMIX_CHANNELS            1008
 
 // Next default values for new objects
 // 
