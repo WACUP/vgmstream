@@ -286,6 +286,7 @@ typedef enum {
     meta_DSP_WII_WSD,       /* Phantom Brave (WII) */
     meta_WII_NDP,           /* Vertigo (Wii) */
     meta_DSP_YGO,           /* Konami: Yu-Gi-Oh! The Falsebound Kingdom (NGC), Hikaru no Go 3 (NGC) */
+    meta_DSP_SADF,          /* Procyon Studio SADF - Xenoblade Chronicles 2 (Switch) */
 
     /* Nintendo */
     meta_STRM,              /* Nintendo STRM */
@@ -680,6 +681,7 @@ typedef enum {
     meta_UBI_BAO,           /* Ubisoft BAO */
     meta_DSP_SWITCH_AUDIO,  /* Gal Gun 2 (Switch) */
     meta_TA_AAC_VITA,       /* tri-Ace AAC (Judas Code) */
+    meta_OGG_GWM,           /* Ogg Vorbis with encryption [Metronomicon (PC)] */
 
 #ifdef VGM_USE_FFMPEG
     meta_FFmpeg,
