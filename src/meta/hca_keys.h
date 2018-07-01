@@ -237,6 +237,15 @@ static const hcakey_info hcakey_list[] = {
         // Princess Connect Re:Dive (iOS/Android/PC)
         {3201512},      // 000000000030D9E8
 
+        // PriPara: All Idol Perfect Stage (Takara Tomy) [Switch]
+        {217735759},      // 000000000CFA624F
+
+        // Space Invaders Extreme (Taito Corporation, Backbone Entertainment) [PC]
+        {91380310056},              // 0000001546B0E028
+
+        // CR Another God Hades Advent (Universal Entertainment Corporation) [iOS/Android]
+        {64813795},                 // 0000000003DCFAE3
+
 };
 
 #endif/*_HCA_KEYS_H_*/

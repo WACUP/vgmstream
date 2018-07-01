@@ -56,7 +56,7 @@ extern api_config *configApi;
 #define VERSIONW L"2.0"
 #endif
 
-#define LIBVGMSTREAM_BUILD "1050-1102-g2547915-wacup"
+#define LIBVGMSTREAM_BUILD "1050-1102-g869ca71-wacup"
 #define APP_NAME "vgmstream plugin"
 #define PLUGIN_DESCRIPTION "vgmstream Decoder v" VERSION
 #define PLUGIN_DESCRIPTIONW L"vgmstream Decoder v" VERSIONW
@@ -68,7 +68,7 @@ extern api_config *configApi;
 extern In_Module plugin; /* the input module, declared at the bottom of this file */
 DWORD WINAPI __stdcall decode(void *arg);
 
-/* Winamp Play extension list, needed to accept/play and associate extensions in Windows */
+/* Winamp Play extension list, to accept and associate extensions in Windows */
 #define EXTENSION_LIST_SIZE   (0x2000 * 6)
 #define EXT_BUFFER_SIZE 200
 char working_extension_list[EXTENSION_LIST_SIZE] = {0};
@@ -725,6 +725,28 @@ void quit() {
 
 /* called before extension checks, to allow detection of mms://, etc */
 int isourfile(const in_char *fn) {
+    const in_char *filename;
+    const in_char *extension;
+
+    /* get basename + extension */
+    filename = fn;
+#if 0
+    //must detect empty extensions in folders with . in the name; doesn't work ok?
+    filename = wcsrrchr(fn, wa_L('\\'));
+    if (filename == NULL)
+        filename = fn;
+    else
+        filename++;
+#endif
+    extension = wcsrchr(filename, L'.');
+    if (extension == NULL)
+        return 1; /* extensionless, try to play it */
+    else
+        extension++;
+
+    /* returning 0 here means it only accepts the extensions in working_extension_list */
+    /* it's possible to ignore the list and manually accept extensions, like foobar's g_is_our_path */
+
     return 0;
 }
 
@@ -1291,7 +1313,7 @@ extern "C" __declspec (dllexport) int winampGetExtendedFileInfoW(wchar_t *filena
 	/* even if no file, return a 1 and write "0" */
 	if (!_stricmp(metadata, "length"))
 	{
-		StringCchPrintf(ret, retlen, L"%d", 0);
+		lstrcpyn(ret, L"0", retlen);
 		retval = 1;
 	}
 
@@ -1331,8 +1353,8 @@ extern "C" __declspec (dllexport) int winampGetExtendedFileInfoW(wchar_t *filena
 			}
 			else
 			{
-				StringCchPrintf(ret, retlen, L"%d", get_vgmstream_play_samples(loop_count, fade_seconds,
-								fade_delay_seconds, infostream) * 1000LL / infostream->sample_rate);
+				_itow_s(get_vgmstream_play_samples(loop_count, fade_seconds, fade_delay_seconds, infostream) *
+												   1000LL / infostream->sample_rate, ret, retlen, 10);
 				close_vgmstream(infostream);
 				infostream = NULL;
 				retval = 1;

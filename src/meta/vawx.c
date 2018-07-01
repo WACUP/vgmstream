@@ -6,7 +6,7 @@
 /* VAWX - found in feelplus games (No More Heroes Heroes Paradise, Moon Diver) */
 VGMSTREAM * init_vgmstream_vawx(STREAMFILE *streamFile) {
     VGMSTREAM * vgmstream = NULL;
-    off_t start_offset;
+    off_t start_offset, data_size;
 
     int loop_flag = 0, channel_count, type;
 
@@ -52,7 +52,7 @@ VGMSTREAM * init_vgmstream_vawx(STREAMFILE *streamFile) {
             uint8_t buf[0x100];
             int32_t bytes, block_size, block_count;
 
-            off_t data_size = get_streamfile_size(streamFile)-start_offset;
+            data_size = get_streamfile_size(streamFile)-start_offset;
             block_size = 0x10000; /* VAWX default */
             block_count = (uint16_t)read_16bitBE(0x3A, streamFile); /* also at 0x56 */
 
@@ -75,7 +75,7 @@ VGMSTREAM * init_vgmstream_vawx(STREAMFILE *streamFile) {
             uint8_t buf[0x100];
             int32_t bytes, block_size, encoder_delay, joint_stereo, max_samples;
 
-            off_t data_size = read_32bitBE(0x54,streamFile);
+            data_size = read_32bitBE(0x54,streamFile);
             block_size = 0x98 * vgmstream->channels;
             joint_stereo = 0;
             max_samples = atrac3_bytes_to_samples(data_size, block_size);
