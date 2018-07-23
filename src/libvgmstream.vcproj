@@ -229,6 +229,10 @@
                     >
                 </File>
                 <File
+                    RelativePath=".\meta\ea_schl_streamfile.h"
+                    >
+                </File>
+                <File
                     RelativePath=".\meta\opus_interleave_streamfile.h"
                     >
                 </File>
@@ -292,6 +296,10 @@
 					RelativePath=".\meta\apple_caff.c"
 					>
 				</File>
+                <File
+                    RelativePath=".\meta\asf.c"
+                    >
+                </File>
 				<File
 					RelativePath=".\meta\ast.c"
 					>
@@ -1542,6 +1550,10 @@
 					RelativePath=".\coding\adx_decoder.c"
 					>
 				</File>
+                <File
+                    RelativePath=".\coding\asf_decoder.c"
+                    >
+                </File>
 				<File
 					RelativePath=".\coding\yamaha_decoder.c"
 					>

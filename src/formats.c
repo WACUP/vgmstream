@@ -19,6 +19,7 @@ static const char* extension_list[] = {
     "aa3", //FFmpeg, not parsed (ATRAC3/ATRAC3PLUS/MP3/LPCM/WMA)
     "aaap",
     "aax",
+    "abk",
     //"ac3", //FFmpeg, not parsed //common?
     "ace", //fake, for tri-Ace's formats (to be removed)
     "acm",
@@ -145,6 +146,7 @@ static const char* extension_list[] = {
 
     "h4m",
     "hca",
+    "hdr",
     "hgc1",
     "his",
     "hlwav",
@@ -183,6 +185,7 @@ static const char* extension_list[] = {
     "laac", //fake extension, for AAC (tri-Ace/FFmpeg)
     "lac3", //fake extension, for AC3
     "leg",
+    "lflac", //fake extension, FFmpeg, not parsed, use with .pos pair for fun
     "lmp4", //fake extension, for MP4s
     "logg", //fake extension, for OGGs
     "lopus", //fake extension, for OPUS
@@ -233,6 +236,7 @@ static const char* extension_list[] = {
     "naac",
     "ndp",
     "ngca",
+    "nlsd",
     "nop",
     "nps",
     "npsf", //fake extension/header id for .nps (to be removed)
@@ -546,6 +550,7 @@ static const coding_info coding_info_list[] = {
         {coding_MTA2,               "Konami MTA2 4-bit ADPCM"},
         {coding_MC3,                "Paradigm MC3 3-bit ADPCM"},
         {coding_FADPCM,             "FMOD FADPCM 4-bit ADPCM"},
+        {coding_ASF,                "Argonaut ASF 4-bit ADPCM"},
 
         {coding_SDX2,               "Squareroot-delta-exact (SDX2) 8-bit DPCM"},
         {coding_SDX2_int,           "Squareroot-delta-exact (SDX2) 8-bit DPCM with 1 byte interleave"},
@@ -1030,6 +1035,7 @@ static const meta_info meta_info_list[] = {
         {meta_DSP_SADF,             "Procyon Studio SADF header"},
         {meta_H4M,                  "Hudson HVQM4 header"},
         {meta_OGG_MUS,              "Ogg Vorbis (MUS header)"},
+        {meta_ASF,                  "Argonaut ASF header"},
 
 #ifdef VGM_USE_FFMPEG
         {meta_FFmpeg,               "FFmpeg supported file format"},

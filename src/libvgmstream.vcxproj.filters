@@ -77,6 +77,9 @@
     <ClInclude Include="meta\ea_eaac_streamfile.h">
       <Filter>meta\Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="meta\ea_schl_streamfile.h">
+      <Filter>meta\Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="meta\opus_interleave_streamfile.h">
       <Filter>meta\Header Files</Filter>
     </ClInclude>
@@ -179,6 +182,9 @@
       <Filter>meta\Source Files</Filter>
     </ClCompile>
     <ClCompile Include="meta\apple_caff.c">
+      <Filter>meta\Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="meta\asf.c">
       <Filter>meta\Source Files</Filter>
     </ClCompile>
     <ClCompile Include="meta\ast.c">
@@ -908,6 +914,9 @@
       <Filter>coding\Source Files</Filter>
     </ClCompile>
     <ClCompile Include="coding\adx_decoder.c">
+      <Filter>coding\Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="coding\asf_decoder.c">
       <Filter>coding\Source Files</Filter>
     </ClCompile>
     <ClCompile Include="coding\yamaha_decoder.c">
