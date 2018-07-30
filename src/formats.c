@@ -32,6 +32,7 @@ static const char* extension_list[] = {
     "afc",
     "agsc",
     "ahx",
+    "ai",
     //"aif", //common
     "aifc", //common?
     "aifcl", //fake extension, for AIF???
@@ -158,6 +159,7 @@ static const char* extension_list[] = {
     "iadp",
     "idsp",
     "idvi", //fake extension for .pcm (to be removed)
+    "idx",
     "ikm",
     "ild",
     "int",
@@ -361,6 +363,7 @@ static const char* extension_list[] = {
     "sxd2",
 
     "tec",
+    "tgq",
     "thp",
     "tk5",
     "tra",
@@ -372,6 +375,7 @@ static const char* extension_list[] = {
 
     "ulw",
     "um3",
+    "uv",
 
     "v0",
     //"v1", //dual channel with v0
@@ -428,11 +432,13 @@ static const char* extension_list[] = {
     "xmu",
     "xnb",
     "xsf",
+    "xsew",
     "xss",
     "xvag",
     "xvas",
     "xwav",//fake, to be removed
     "xwb",
+    "xmd",
     "xwc",
     "xwm", //FFmpeg, not parsed (XWMA)
     "xwma", //FFmpeg, not parsed (XWMA)
@@ -551,6 +557,7 @@ static const coding_info coding_info_list[] = {
         {coding_MC3,                "Paradigm MC3 3-bit ADPCM"},
         {coding_FADPCM,             "FMOD FADPCM 4-bit ADPCM"},
         {coding_ASF,                "Argonaut ASF 4-bit ADPCM"},
+        {coding_XMD,                "Konami XMD 4-bit ADPCM"},
 
         {coding_SDX2,               "Squareroot-delta-exact (SDX2) 8-bit DPCM"},
         {coding_SDX2_int,           "Squareroot-delta-exact (SDX2) 8-bit DPCM with 1 byte interleave"},
@@ -637,6 +644,7 @@ static const layout_info layout_info_list[] = {
         {layout_blocked_ea_wve_ad10,    "blocked (EA WVE Ad10)"},
         {layout_blocked_sthd,           "blocked (STHD)"},
         {layout_blocked_h4m,            "blocked (H4M)"},
+        {layout_blocked_xa_aiff,        "blocked (XA AIFF)"},
 };
 
 static const meta_info meta_info_list[] = {
@@ -1036,6 +1044,7 @@ static const meta_info meta_info_list[] = {
         {meta_H4M,                  "Hudson HVQM4 header"},
         {meta_OGG_MUS,              "Ogg Vorbis (MUS header)"},
         {meta_ASF,                  "Argonaut ASF header"},
+        {meta_XMD,                  "Konami XMD header"},
 
 #ifdef VGM_USE_FFMPEG
         {meta_FFmpeg,               "FFmpeg supported file format"},

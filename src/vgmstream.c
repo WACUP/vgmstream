@@ -359,7 +359,8 @@ VGMSTREAM * (*init_vgmstream_functions[])(STREAMFILE *streamFile) = {
     init_vgmstream_wii_04sw,
     init_vgmstream_ea_bnk,
     init_vgmstream_ea_abk,
-    init_vgmstream_ea_hdr,
+    init_vgmstream_ea_hdr_dat,
+    init_vgmstream_ea_idx_big,
     init_vgmstream_ea_schl_fixed,
     init_vgmstream_sk_aud,
     init_vgmstream_stm,
@@ -380,6 +381,8 @@ VGMSTREAM * (*init_vgmstream_functions[])(STREAMFILE *streamFile) = {
     init_vgmstream_vxn,
     init_vgmstream_ea_snr_sns,
     init_vgmstream_ea_sps,
+    init_vgmstream_ea_abk_new,
+    init_vgmstream_ea_hdr_sth_dat,
     init_vgmstream_ngc_vid1,
     init_vgmstream_flx,
     init_vgmstream_mogg,
@@ -416,6 +419,7 @@ VGMSTREAM * (*init_vgmstream_functions[])(STREAMFILE *streamFile) = {
     init_vgmstream_h4m,
     init_vgmstream_ps2_ads_container,
     init_vgmstream_asf,
+    init_vgmstream_xmd,
 
     init_vgmstream_txth,  /* should go at the end (lower priority) */
 #ifdef VGM_USE_FFMPEG
@@ -943,6 +947,7 @@ void render_vgmstream(sample * buffer, int32_t sample_count, VGMSTREAM * vgmstre
         case layout_blocked_ea_wve_ad10:
         case layout_blocked_sthd:
         case layout_blocked_h4m:
+        case layout_blocked_xa_aiff:
             render_vgmstream_blocked(buffer,sample_count,vgmstream);
             break;
         case layout_aix:
@@ -1057,6 +1062,7 @@ int get_vgmstream_samples_per_frame(VGMSTREAM * vgmstream) {
             return 32;
 
         case coding_XA:
+            return 28*8 / vgmstream->channels; /* 8 subframes per frame, mono/stereo */
         case coding_PSX:
         case coding_PSX_badflags:
         case coding_HEVAG:
@@ -1122,6 +1128,8 @@ int get_vgmstream_samples_per_frame(VGMSTREAM * vgmstream) {
             return 256; /* (0x8c - 0xc) * 2 */
         case coding_ASF:
             return 32;  /* (0x11 - 0x1) * 2 */
+        case coding_XMD:
+            return (vgmstream->interleave_block_size - 0x06)*2 + 2;
         case coding_EA_MT:
             return 432;
         case coding_CRI_HCA:
@@ -1221,7 +1229,7 @@ int get_vgmstream_frame_size(VGMSTREAM * vgmstream) {
             return 0x22;
 
         case coding_XA:
-            return 0x0e*vgmstream->channels;
+            return 0x80;
         case coding_PSX:
         case coding_PSX_badflags:
         case coding_HEVAG:
@@ -1280,6 +1288,8 @@ int get_vgmstream_frame_size(VGMSTREAM * vgmstream) {
             return 0x8c;
         case coding_ASF:
             return 0x11;
+        case coding_XMD:
+            return vgmstream->interleave_block_size;
         case coding_EA_MT:
             return 0; /* variable (frames of bit counts or PCM frames) */
 #ifdef VGM_USE_ATRAC9
@@ -1561,7 +1571,7 @@ void decode_vgmstream(VGMSTREAM * vgmstream, int samples_written, int samples_to
             break;
         case coding_XA:
             for (chan=0;chan<vgmstream->channels;chan++) {
-                decode_xa(vgmstream,buffer+samples_written*vgmstream->channels+chan,
+                decode_xa(&vgmstream->ch[chan],buffer+samples_written*vgmstream->channels+chan,
                         vgmstream->channels,vgmstream->samples_into_block,
                         samples_to_do,chan);
             }
@@ -1916,6 +1926,13 @@ void decode_vgmstream(VGMSTREAM * vgmstream, int samples_written, int samples_to
                 decode_asf(&vgmstream->ch[chan],buffer+samples_written*vgmstream->channels+chan,
                         vgmstream->channels,vgmstream->samples_into_block,
                         samples_to_do);
+            }
+            break;
+        case coding_XMD:
+            for (chan=0;chan<vgmstream->channels;chan++) {
+                decode_xmd(&vgmstream->ch[chan],buffer+samples_written*vgmstream->channels+chan,
+                        vgmstream->channels,vgmstream->samples_into_block,
+                        samples_to_do, vgmstream->interleave_block_size);
             }
             break;
         case coding_EA_MT:

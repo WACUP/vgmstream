@@ -82,7 +82,7 @@ size_t ps_cfg_bytes_to_samples(size_t bytes, size_t frame_size, int channels);
 void decode_hevag(VGMSTREAMCHANNEL * stream, sample * outbuf, int channelspacing, int32_t first_sample, int32_t samples_to_do);
 
 /* xa_decoder */
-void decode_xa(VGMSTREAM * stream, sample * outbuf, int channelspacing, int32_t first_sample, int32_t samples_to_do, int channel);
+void decode_xa(VGMSTREAMCHANNEL * stream, sample * outbuf, int channelspacing, int32_t first_sample, int32_t samples_to_do, int channel);
 size_t xa_bytes_to_samples(size_t bytes, int channels, int is_blocked);
 
 /* ea_xa_decoder */
@@ -150,6 +150,9 @@ void decode_fadpcm(VGMSTREAMCHANNEL * stream, sample * outbuf, int channelspacin
 
 /* asf_decoder */
 void decode_asf(VGMSTREAMCHANNEL * stream, sample * outbuf, int channelspacing, int32_t first_sample, int32_t samples_to_do);
+
+/* xmd_decoder */
+void decode_xmd(VGMSTREAMCHANNEL * stream, sample * outbuf, int channelspacing, int32_t first_sample, int32_t samples_to_do, size_t frame_size);
 
 /* ea_mt_decoder*/
 ea_mt_codec_data *init_ea_mt(int channel_count, int type);
@@ -251,7 +254,7 @@ void ffmpeg_set_skip_samples(ffmpeg_codec_data * data, int skip_samples);
 
 
 size_t ffmpeg_make_opus_header(uint8_t * buf, int buf_size, int channels, int skip, int sample_rate);
-size_t ffmpeg_get_eaxma_virtual_size(int channels, off_t real_offset, size_t real_size, STREAMFILE *streamFile);
+size_t ffmpeg_get_eaxma_virtual_size(int channels, int streamed, off_t real_offset, size_t real_size, STREAMFILE *streamFile);
 
 size_t switch_opus_get_samples(off_t offset, size_t data_size, int sample_rate, STREAMFILE *streamFile);
 
