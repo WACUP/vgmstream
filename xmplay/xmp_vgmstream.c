@@ -329,22 +329,26 @@ char * WINAPI xmplay_GetTags() {
 
 /* main panel info text (short file info) */
 void WINAPI xmplay_GetInfoText(char* format, char* length) {
+    int rate, samples, bps;
+    const char* fmt;
+    int t, tmin, tsec;
+
     if (!format)
         return;
-	if (!vgmstream)
-		return;
+    if (!vgmstream)
+        return;
 
-	int rate = vgmstream->sample_rate;
-	int samples = vgmstream->num_samples;
-	int bps = get_vgmstream_average_bitrate(vgmstream) / 1000;
-	char* fmt = get_vgmstream_coding_description(vgmstream->coding_type);
-	
-	int t = samples / rate;
-	int tmin = t / 60;
-	int tsec = t % 60;
+    rate = vgmstream->sample_rate;
+    samples = vgmstream->num_samples;
+    bps = get_vgmstream_average_bitrate(vgmstream) / 1000;
+    fmt = get_vgmstream_coding_description(vgmstream->coding_type);
 
-	sprintf(format, "%s", fmt);
-	sprintf(length, "%d:%02d - %dKb/s - %dHz", tmin, tsec, bps, rate);
+    t = samples / rate;
+    tmin = t / 60;
+    tsec = t % 60;
+
+    sprintf(format, "%s", fmt);
+    sprintf(length, "%d:%02d - %dKb/s - %dHz", tmin, tsec, bps, rate);
 }
 
 /* info for the "General" window/tab (buf is ~40K) */

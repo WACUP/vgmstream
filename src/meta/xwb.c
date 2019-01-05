@@ -67,10 +67,13 @@ typedef struct {
     uint32_t loop_end;
     uint32_t loop_start_sample;
     uint32_t loop_end_sample;
+
+    int is_crackdown;
+    int fix_xma_num_samples;
+    int fix_xma_loop_samples;
 } xwb_header;
 
 static void get_name(char * buf, size_t maxsize, int target_subsong, xwb_header * xwb, STREAMFILE *streamFile);
-static STREAMFILE* setup_subfile_streamfile(STREAMFILE *streamFile, off_t subfile_offset, size_t subfile_size, const char* fake_ext);
 
 
 /* XWB - XACT Wave Bank (Microsoft SDK format for XBOX/XBOX360/Windows) */
@@ -83,13 +86,16 @@ VGMSTREAM * init_vgmstream_xwb(STREAMFILE *streamFile) {
 
 
     /* checks */
-    if (!check_extensions(streamFile,"xwb"))
+    /* .xwb: standard
+     * .xna: Touhou Makukasai ~ Fantasy Danmaku Festival (PC)
+     * (extensionless): Grabbed by the Ghoulies (Xbox) */
+    if (!check_extensions(streamFile,"xwb,xna,"))
         goto fail;
     if ((read_32bitBE(0x00,streamFile) != 0x57424E44) &&    /* "WBND" (LE) */
         (read_32bitBE(0x00,streamFile) != 0x444E4257))      /* "DNBW" (BE) */
         goto fail;
 
-    xwb.little_endian = read_32bitBE(0x00,streamFile) == 0x57424E44;/* WBND */
+    xwb.little_endian = read_32bitBE(0x00,streamFile) == 0x57424E44; /* WBND */
     if (xwb.little_endian) {
         read_32bit = read_32bitLE;
     } else {
@@ -100,9 +106,11 @@ VGMSTREAM * init_vgmstream_xwb(STREAMFILE *streamFile) {
     /* read main header (WAVEBANKHEADER) */
     xwb.version = read_32bit(0x04, streamFile); /* XACT3: 0x04=tool version, 0x08=header version */
 
-    /* Crackdown 1 X360, essentially XACT2 but may have split header in some cases */
-    if (xwb.version == XACT_CRACKDOWN)
+    /* Crackdown 1 (X360), essentially XACT2 but may have split header in some cases */
+    if (xwb.version == XACT_CRACKDOWN) {
         xwb.version = XACT2_2_MAX;
+        xwb.is_crackdown = 1;
+    }
 
     /* read segment offsets (SEGIDX) */
     if (xwb.version <= XACT1_0_MAX) {
@@ -220,7 +228,7 @@ VGMSTREAM * init_vgmstream_xwb(STREAMFILE *streamFile) {
         xwb.stream_offset   = xwb.data_offset + (uint32_t)read_32bit(off+0x08, streamFile);
         xwb.stream_size     = (uint32_t)read_32bit(off+0x0c, streamFile);
 
-		if (xwb.version <= XACT2_1_MAX) { /* LoopRegion (bytes) */
+        if (xwb.version <= XACT2_1_MAX) { /* LoopRegion (bytes) */
             xwb.loop_start  = (uint32_t)read_32bit(off+0x10, streamFile);
             xwb.loop_end    = (uint32_t)read_32bit(off+0x14, streamFile);//length (LoopRegion) or offset (XMALoopRegion in late XACT2)
         } else { /* LoopRegion (samples) */
@@ -361,9 +369,9 @@ VGMSTREAM * init_vgmstream_xwb(STREAMFILE *streamFile) {
         xwb.loop_start_sample = msadpcm_bytes_to_samples(xwb.loop_start, block_size, xwb.channels);
         xwb.loop_end_sample   = msadpcm_bytes_to_samples(xwb.loop_start + xwb.loop_end, block_size, xwb.channels);
     }
-    else if (xwb.version <= XACT2_1_MAX && (xwb.codec == XMA1 || xwb.codec == XMA2) &&  xwb.loop_flag) {
-	    /* v38: byte offset, v40+: sample offset, v39: ? */
-        /* need to manually find sample offsets, thanks to Microsoft dumb headers */
+    else if (xwb.version <= XACT2_1_MAX && (xwb.codec == XMA1 || xwb.codec == XMA2) && xwb.loop_flag) {
+        /* v38: byte offset, v40+: sample offset, v39: ? */
+        /* need to manually find sample offsets, thanks to Microsoft's dumb headers */
         ms_sample_data msd = {0};
 
         msd.xma_version = xwb.codec == XMA1 ? 1 : 2;
@@ -381,21 +389,27 @@ VGMSTREAM * init_vgmstream_xwb(STREAMFILE *streamFile) {
         xwb.loop_start_sample = msd.loop_start_sample;
         xwb.loop_end_sample   = msd.loop_end_sample;
 
-        // todo fix properly (XWB loop_start/end seem to count padding samples while XMA1 RIFF doesn't)
-        //this doesn't seem ok because can fall within 0 to 512 (ie.- first frame, 384)
-        //if (xwb.loop_start_sample) xwb.loop_start_sample -= 512;
-        //if (xwb.loop_end_sample) xwb.loop_end_sample -= 512;
+        /* if provided, xwb.num_samples is equal to msd.num_samples after proper adjustments (+ 128 - start_skip - end_skip) */
+        xwb.fix_xma_loop_samples = 1;
+        xwb.fix_xma_num_samples = 0;
 
-        //add padding back until it's fixed (affects looping)
-        // (in rare cases this causes a glitch in FFmpeg since it has a bug where it's missing some samples)
-        xwb.num_samples += 64 + 512;
+        /* for XWB v22 (and below?) this seems normal [Project Gotham Racing (X360)] */
+        if (xwb.num_samples == 0) {
+            xwb.num_samples   = msd.num_samples;
+            xwb.fix_xma_num_samples = 1;
+        }
     }
     else if ((xwb.codec == XMA1 || xwb.codec == XMA2) &&  xwb.loop_flag) {
-        /* seems to be needed by some edge cases, ex. Crackdown */
-        //add padding, see above
-        xwb.num_samples += 64 + 512;
-    }
+        /* unlike prev versions, xwb.num_samples is the full size without adjustments */
+        xwb.fix_xma_loop_samples = 1;
+        xwb.fix_xma_num_samples = 1;
 
+        /* Crackdown does use xwb.num_samples after adjustments (but not loops) */
+        if (xwb.is_crackdown) {
+            xwb.fix_xma_num_samples = 0;
+        }
+    }
+VGM_LOG("fix: num=%i, loop=%i\n", xwb.fix_xma_num_samples,xwb.fix_xma_loop_samples);
 
     /* build the VGMSTREAM */
     vgmstream = allocate_vgmstream(xwb.channels,xwb.loop_flag);
@@ -431,37 +445,44 @@ VGMSTREAM * init_vgmstream_xwb(STREAMFILE *streamFile) {
 
 #ifdef VGM_USE_FFMPEG
         case XMA1: { /* Kameo (X360) */
-            uint8_t buf[100];
+            uint8_t buf[0x100];
             int bytes;
 
-            bytes = ffmpeg_make_riff_xma1(buf, 100, vgmstream->num_samples, xwb.stream_size, vgmstream->channels, vgmstream->sample_rate, 0);
-            if (bytes <= 0) goto fail;
-
+            bytes = ffmpeg_make_riff_xma1(buf,0x100, vgmstream->num_samples, xwb.stream_size, vgmstream->channels, vgmstream->sample_rate, 0);
             vgmstream->codec_data = init_ffmpeg_header_offset(streamFile, buf,bytes, xwb.stream_offset,xwb.stream_size);
             if (!vgmstream->codec_data) goto fail;
             vgmstream->coding_type = coding_FFmpeg;
             vgmstream->layout_type = layout_none;
+
+            xma_fix_raw_samples(vgmstream, streamFile, xwb.stream_offset,xwb.stream_size, 0, xwb.fix_xma_num_samples,xwb.fix_xma_loop_samples);
+
+            /* this fixes some XMA1, perhaps the above isn't reading end_skip correctly (doesn't happen for all files though) */
+            if (vgmstream->loop_flag &&
+                    vgmstream->loop_end_sample > vgmstream->num_samples) {
+                VGM_LOG("XWB: fix XMA1 looping\n");
+                vgmstream->loop_end_sample = vgmstream->num_samples;
+            }
             break;
         }
 
         case XMA2: { /* Blue Dragon (X360) */
-            uint8_t buf[100];
+            uint8_t buf[0x100];
             int bytes, block_size, block_count;
 
             block_size = 0x10000; /* XACT default */
             block_count = xwb.stream_size / block_size + (xwb.stream_size % block_size ? 1 : 0);
 
-            bytes = ffmpeg_make_riff_xma2(buf, 100, vgmstream->num_samples, xwb.stream_size, vgmstream->channels, vgmstream->sample_rate, block_count, block_size);
-            if (bytes <= 0) goto fail;
-
+            bytes = ffmpeg_make_riff_xma2(buf,0x100, vgmstream->num_samples, xwb.stream_size, vgmstream->channels, vgmstream->sample_rate, block_count, block_size);
             vgmstream->codec_data = init_ffmpeg_header_offset(streamFile, buf,bytes, xwb.stream_offset,xwb.stream_size);
             if (!vgmstream->codec_data) goto fail;
             vgmstream->coding_type = coding_FFmpeg;
             vgmstream->layout_type = layout_none;
+
+            xma_fix_raw_samples(vgmstream, streamFile, xwb.stream_offset,xwb.stream_size, 0, xwb.fix_xma_num_samples,xwb.fix_xma_loop_samples);
             break;
         }
 
-        case WMA: { /* WMAudio1 (WMA v1): Prince of Persia 2 port (Xbox) */
+        case WMA: { /* WMAudio1 (WMA v2): Prince of Persia 2 port (Xbox) */
             ffmpeg_codec_data *ffmpeg_data = NULL;
 
             ffmpeg_data = init_ffmpeg_offset(streamFile, xwb.stream_offset,xwb.stream_size);
@@ -477,10 +498,10 @@ VGMSTREAM * init_vgmstream_xwb(STREAMFILE *streamFile) {
         }
 
         case XWMA: { /* WMAudio2 (WMA v2): BlazBlue (X360), WMAudio3 (WMA Pro): Bullet Witch (PC) voices */
-            uint8_t buf[100];
+            uint8_t buf[0x100];
             int bytes, bps_index, block_align, block_index, avg_bps, wma_codec;
 
-            bps_index = (xwb.block_align >> 5);  /* upper 3b bytes-per-second index */ //docs say 2b+6b but are wrong
+            bps_index = (xwb.block_align >> 5);  /* upper 3b bytes-per-second index (docs say 2b+6b but are wrong) */
             block_index =  (xwb.block_align) & 0x1F; /*lower 5b block alignment index */
             if (bps_index >= 7) goto fail;
             if (block_index >= 17) goto fail;
@@ -489,9 +510,7 @@ VGMSTREAM * init_vgmstream_xwb(STREAMFILE *streamFile) {
             block_align = wma_block_align_index[block_index];
             wma_codec = xwb.bits_per_sample ? 0x162 : 0x161; /* 0=WMAudio2, 1=WMAudio3 */
 
-            bytes = ffmpeg_make_riff_xwma(buf, 100, wma_codec, xwb.stream_size, vgmstream->channels, vgmstream->sample_rate, avg_bps, block_align);
-            if (bytes <= 0) goto fail;
-
+            bytes = ffmpeg_make_riff_xwma(buf,0x100, wma_codec, xwb.stream_size, vgmstream->channels, vgmstream->sample_rate, avg_bps, block_align);
             vgmstream->codec_data = init_ffmpeg_header_offset(streamFile, buf,bytes, xwb.stream_offset,xwb.stream_size);
             if (!vgmstream->codec_data) goto fail;
             vgmstream->coding_type = coding_FFmpeg;
@@ -500,16 +519,14 @@ VGMSTREAM * init_vgmstream_xwb(STREAMFILE *streamFile) {
         }
 
         case ATRAC3: { /* Techland PS3 extension [Sniper Ghost Warrior (PS3)] */
-            uint8_t buf[200];
+            uint8_t buf[0x100];
             int bytes;
 
             int block_size = xwb.block_align * vgmstream->channels;
             int joint_stereo = xwb.block_align == 0x60; /* untested, ATRAC3 default */
             int skip_samples = 0; /* unknown */
 
-            bytes = ffmpeg_make_riff_atrac3(buf, 200, vgmstream->num_samples, xwb.stream_size, vgmstream->channels, vgmstream->sample_rate, block_size, joint_stereo, skip_samples);
-            if (bytes <= 0) goto fail;
-
+            bytes = ffmpeg_make_riff_atrac3(buf,0x100, vgmstream->num_samples, xwb.stream_size, vgmstream->channels, vgmstream->sample_rate, block_size, joint_stereo, skip_samples);
             vgmstream->codec_data = init_ffmpeg_header_offset(streamFile, buf,bytes, xwb.stream_offset,xwb.stream_size);
             if ( !vgmstream->codec_data ) goto fail;
             vgmstream->coding_type = coding_FFmpeg;
@@ -574,31 +591,6 @@ VGMSTREAM * init_vgmstream_xwb(STREAMFILE *streamFile) {
 
 fail:
     close_vgmstream(vgmstream);
-    return NULL;
-}
-
-/* ****************************************************************************** */
-
-static STREAMFILE* setup_subfile_streamfile(STREAMFILE *streamFile, off_t subfile_offset, size_t subfile_size, const char* fake_ext) {
-    STREAMFILE *temp_streamFile = NULL, *new_streamFile = NULL;
-
-    /* setup subfile */
-    new_streamFile = open_wrap_streamfile(streamFile);
-    if (!new_streamFile) goto fail;
-    temp_streamFile = new_streamFile;
-
-    new_streamFile = open_clamp_streamfile(temp_streamFile, subfile_offset,subfile_size);
-    if (!new_streamFile) goto fail;
-    temp_streamFile = new_streamFile;
-
-    new_streamFile = open_fakename_streamfile(temp_streamFile, NULL,fake_ext);
-    if (!new_streamFile) goto fail;
-    temp_streamFile = new_streamFile;
-
-    return temp_streamFile;
-
-fail:
-    close_streamfile(temp_streamFile);
     return NULL;
 }
 
@@ -704,17 +696,17 @@ static int get_xsb_name(char * buf, size_t maxsize, int target_subsong, xwb_head
 
     off = 0;
     if (xsb_version <= XSB_XACT1_MAX) {
-        xsb.xsb_wavebanks_count = 1; //read_8bit(0x22, streamFile);
-        xsb.xsb_sounds_count = read_16bit(0x1e, streamFile);//@ 0x1a? 0x1c?
+        xsb.xsb_wavebanks_count = 1; //(uint8_t)read_8bit(0x22, streamFile);
+        xsb.xsb_sounds_count = (uint16_t)read_16bit(0x1e, streamFile);//@ 0x1a? 0x1c?
         //xsb.xsb_names_size   = 0;
         //xsb.xsb_names_offset = 0;
         xsb.xsb_nameoffsets_offset = 0;
         xsb.xsb_sounds_offset = 0x38;
     } else if (xsb_version <= XSB_XACT2_MAX) {
-        xsb.xsb_simple_sounds_count = read_16bit(0x09, streamFile);
-        xsb.xsb_complex_sounds_count = read_16bit(0x0B, streamFile);
-        xsb.xsb_wavebanks_count = read_8bit(0x11, streamFile);
-        xsb.xsb_sounds_count = read_16bit(0x12, streamFile);
+        xsb.xsb_simple_sounds_count = (uint16_t)read_16bit(0x09, streamFile);
+        xsb.xsb_complex_sounds_count = (uint16_t)read_16bit(0x0B, streamFile);
+        xsb.xsb_wavebanks_count = (uint8_t)read_8bit(0x11, streamFile);
+        xsb.xsb_sounds_count = (uint16_t)read_16bit(0x12, streamFile);
         //0x14: 16b unk
         //xsb.xsb_names_size   = read_32bit(0x16, streamFile);
         xsb.xsb_simple_sounds_offset = read_32bit(0x1a, streamFile);
@@ -723,9 +715,9 @@ static int get_xsb_name(char * buf, size_t maxsize, int target_subsong, xwb_head
         xsb.xsb_nameoffsets_offset = read_32bit(0x3a, streamFile);
         xsb.xsb_sounds_offset = read_32bit(0x3e, streamFile);
     } else {
-        xsb.xsb_simple_sounds_count = read_16bit(0x13, streamFile);
-        xsb.xsb_complex_sounds_count = read_16bit(0x15, streamFile);
-        xsb.xsb_wavebanks_count = read_8bit(0x1b, streamFile);
+        xsb.xsb_simple_sounds_count = (uint16_t)read_16bit(0x13, streamFile);
+        xsb.xsb_complex_sounds_count = (uint16_t)read_16bit(0x15, streamFile);
+        xsb.xsb_wavebanks_count = (uint8_t)read_8bit(0x1b, streamFile);
         xsb.xsb_sounds_count = read_16bit(0x1c, streamFile);
         //xsb.xsb_names_size   = read_32bit(0x1e, streamFile);
         xsb.xsb_simple_sounds_offset = read_32bit(0x22, streamFile);
@@ -765,21 +757,21 @@ static int get_xsb_name(char * buf, size_t maxsize, int target_subsong, xwb_head
             size = 0x14;
 
             if (flag != 0x01) {
-                VGM_LOG("XSB: xsb flag 0x%x at offset 0x%08lx not implemented\n", flag, off);
+                //VGM_LOG("XSB: xsb flag 0x%x at offset 0x%08lx not implemented\n", flag, off);
                 goto fail;
             }
 
-            s->wavebank     = 0; //read_8bit(off+suboff + 0x02, streamFile);
-            s->stream_index = read_16bit(off+0x02, streamFile);
+            s->wavebank     = 0; //(uint8_t)read_8bit(off+suboff + 0x02, streamFile);
+            s->stream_index = (uint16_t)read_16bit(off+0x02, streamFile);
             s->sound_offset = off;
-            s->name_offset  = read_16bit(off+0x04, streamFile);
+            s->name_offset  = (uint16_t)read_16bit(off+0x04, streamFile);
         }
         else {
             /* Each XSB sound has a variable size and somewhere inside is the stream/wavebank index.
              * Various flags control the sound layout, but I can't make sense of them so quick hack instead */
             flag = read_8bit(off+0x00, streamFile);
             //0x01 16b unk, 0x03: 8b unk 04: 16b unk, 06: 8b unk
-            size = read_16bit(off+0x07, streamFile);
+            size = (uint16_t)read_16bit(off+0x07, streamFile);
 
             if (!(flag & 0x01)) { /* simple sound */
                 suboff = 0x09;
@@ -788,7 +780,7 @@ static int get_xsb_name(char * buf, size_t maxsize, int target_subsong, xwb_head
                 if (flag==0x01 || flag==0x03 || flag==0x05 || flag==0x07) {
                     if (size == 0x49) { //grotesque hack for Eschatos (these flags are way too complex)
                         suboff = 0x23;
-                    } else if (size % 2 == 1 && read_16bit(off+size-0x2, streamFile)!=0) {
+                    } else if (size % 2 == 1 && (uint16_t)read_16bit(off+size-0x2, streamFile)!=0) {
                         suboff = size - 0x08 - 0x07; //7 unk bytes at the end
                     } else {
                         suboff = size - 0x08;
@@ -796,18 +788,18 @@ static int get_xsb_name(char * buf, size_t maxsize, int target_subsong, xwb_head
                 //} else if (flag==0x11) { /* Stardew Valley (Switch) */
                 //    suboff = size; //???
                 } else {
-                    VGM_LOG("XSB: xsb flag 0x%x (size=%x) at offset 0x%08lx not implemented\n", flag, size, off);
+                    //VGM_LOG("XSB: xsb flag 0x%x (size=%x) at offset 0x%08lx not implemented\n", flag, size, off);
                     goto fail;
                 }
             }
 
-            s->stream_index = read_16bit(off+suboff + 0x00, streamFile);
-            s->wavebank     =  read_8bit(off+suboff + 0x02, streamFile);
+            s->stream_index = (uint16_t)read_16bit(off+suboff + 0x00, streamFile);
+            s->wavebank     =   (uint8_t)read_8bit(off+suboff + 0x02, streamFile);
             s->sound_offset = off;
         }
 
         if (s->wavebank+1 > xsb.xsb_wavebanks_count) {
-            VGM_LOG("XSB: unknown xsb wavebank id %i at offset 0x%lx\n", s->wavebank, off);
+            //VGM_LOG("XSB: unknown xsb wavebank id %i at offset 0x%lx\n", s->wavebank, off);
             goto fail;
         }
 
@@ -877,7 +869,7 @@ static int get_xsb_name(char * buf, size_t maxsize, int target_subsong, xwb_head
 
             if (w->sound_count == xwb->total_subsongs) {
                 if (!cfg__selected_wavebank) {
-                    VGM_LOG("XSB: multiple xsb wavebanks with the same number of sounds, use -w to specify one of the wavebanks\n");
+                    //VGM_LOG("XSB: multiple xsb wavebanks with the same number of sounds, use -w to specify one of the wavebanks\n");
                     goto fail;
                 }
 
@@ -892,17 +884,17 @@ static int get_xsb_name(char * buf, size_t maxsize, int target_subsong, xwb_head
     }
 
     if (!cfg__selected_wavebank) {
-        VGM_LOG("XSB: multiple xsb wavebanks but autodetect didn't work\n");
+        //VGM_LOG("XSB: multiple xsb wavebanks but autodetect didn't work\n");
         goto fail;
     }
     if (xsb.xsb_wavebanks[cfg__selected_wavebank-1].sound_count == 0) {
-        VGM_LOG("XSB: xsb selected wavebank %i has no sounds\n", cfg__selected_wavebank);
+        //VGM_LOG("XSB: xsb selected wavebank %i has no sounds\n", cfg__selected_wavebank);
         goto fail;
     }
 
     if (cfg__start_sound) {
         if (xsb.xsb_wavebanks[cfg__selected_wavebank-1].sound_count - (cfg__start_sound-1) < xwb->total_subsongs) {
-            VGM_LOG("XSB: starting sound too high (max in selected wavebank is %i)\n", xsb.xsb_wavebanks[cfg__selected_wavebank-1].sound_count - xwb->total_subsongs + 1);
+            //VGM_LOG("XSB: starting sound too high (max in selected wavebank is %i)\n", xsb.xsb_wavebanks[cfg__selected_wavebank-1].sound_count - xwb->total_subsongs + 1);
             goto fail;
         }
 

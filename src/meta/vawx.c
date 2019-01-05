@@ -3,42 +3,45 @@
 #include "../coding/coding.h"
 
 
-/* VAWX - found in feelplus games (No More Heroes Heroes Paradise, Moon Diver) */
+/* VAWX - found in feelplus games [No More Heroes: Heroes Paradise (PS3/X360), Moon Diver (PS3/X360)] */
 VGMSTREAM * init_vgmstream_vawx(STREAMFILE *streamFile) {
     VGMSTREAM * vgmstream = NULL;
-    off_t start_offset, data_size;
+    off_t start_offset;
+#ifdef VGM_USE_FFMPEG
+	off_t data_size;
+#endif
+    int loop_flag = 0, channel_count, codec;
 
-    int loop_flag = 0, channel_count, type;
 
-    /* check extensions */
-    if ( !check_extensions(streamFile, "vawx,xwv") )
+    /* checks */
+    /* .xwv: actual extension [Moon Diver (PS3/X360)]
+     * .vawx: header id */
+    if ( !check_extensions(streamFile, "xwv,vawx") )
         goto fail;
-
-    /* check header */
     if (read_32bitBE(0x00,streamFile) != 0x56415758) /* "VAWX" */
         goto fail;
 
     loop_flag = read_8bit(0x37,streamFile);
-    channel_count = read_8bit(0x39,streamFile);;
-    
+    channel_count = read_8bit(0x39,streamFile);
+    start_offset = 0x800; /* ? read_32bitLE(0x0c,streamFile); */
+    codec = read_8bit(0x36,streamFile); /* could be at 0x38 too */
+
+
     /* build the VGMSTREAM */
     vgmstream = allocate_vgmstream(channel_count,loop_flag);
     if (!vgmstream) goto fail;
 
     /* 0x04: filesize */
-    start_offset = 0x800; /* ? read_32bitLE(0x0c,streamFile); */
-    vgmstream->channels = channel_count;
     /* 0x16: file id */
-    type = read_8bit(0x36,streamFile); /* could be at 0x38 too */
     vgmstream->num_samples = read_32bitBE(0x3c,streamFile);
     vgmstream->sample_rate = read_32bitBE(0x40,streamFile);
 
     vgmstream->meta_type = meta_VAWX;
 
-    switch(type) {
-        case 2: /* VAG */
+    switch(codec) {
+        case 2: /* PS-ADPCM */
             vgmstream->coding_type = coding_PSX;
-            vgmstream->layout_type = channel_count == 6 ? layout_blocked_vawx : layout_interleave ;
+            vgmstream->layout_type = channel_count == 6 ? layout_blocked_vawx : layout_interleave;
             vgmstream->interleave_block_size = 0x10;
 
             vgmstream->loop_start_sample = read_32bitBE(0x44,streamFile);
@@ -57,8 +60,6 @@ VGMSTREAM * init_vgmstream_vawx(STREAMFILE *streamFile) {
             block_count = (uint16_t)read_16bitBE(0x3A, streamFile); /* also at 0x56 */
 
             bytes = ffmpeg_make_riff_xma2(buf,0x100, vgmstream->num_samples, data_size, vgmstream->channels, vgmstream->sample_rate, block_count, block_size);
-            if (bytes <= 0) goto fail;
-
             ffmpeg_data = init_ffmpeg_header_offset(streamFile, buf,bytes, start_offset,data_size);
             if ( !ffmpeg_data ) goto fail;
             vgmstream->codec_data = ffmpeg_data;
@@ -68,6 +69,8 @@ VGMSTREAM * init_vgmstream_vawx(STREAMFILE *streamFile) {
             vgmstream->loop_start_sample = read_32bitBE(0x44,streamFile);
             vgmstream->loop_end_sample = read_32bitBE(0x48,streamFile);
 
+            /* may be only applying end_skip to num_samples? */
+            xma_fix_raw_samples(vgmstream, streamFile, start_offset,data_size, 0, 0,0);
             break;
         }
 
@@ -84,9 +87,6 @@ VGMSTREAM * init_vgmstream_vawx(STREAMFILE *streamFile) {
 
             /* make a fake riff so FFmpeg can parse the ATRAC3 */
             bytes = ffmpeg_make_riff_atrac3(buf,0x100, vgmstream->num_samples, data_size, vgmstream->channels, vgmstream->sample_rate, block_size, joint_stereo, encoder_delay);
-            if (bytes <= 0)
-                goto fail;
-
             vgmstream->codec_data = init_ffmpeg_header_offset(streamFile, buf,bytes, start_offset,data_size);
             if (!vgmstream->codec_data) goto fail;
             vgmstream->coding_type = coding_FFmpeg;
@@ -106,13 +106,8 @@ VGMSTREAM * init_vgmstream_vawx(STREAMFILE *streamFile) {
     }
 
 
-    /* open the file for reading */
     if ( !vgmstream_open_stream(vgmstream, streamFile, start_offset) )
         goto fail;
-
-    if (vgmstream->layout_type == layout_blocked_vawx)
-        block_update_vawx(start_offset,vgmstream);
-
     return vgmstream;
 
 fail:

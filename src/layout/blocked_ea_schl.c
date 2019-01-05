@@ -23,7 +23,7 @@ void block_update_ea_schl(off_t block_offset, VGMSTREAM * vgmstream) {
     {
         uint32_t block_id = read_32bitBE(block_offset+0x00,streamFile);
 
-        if (guess_endianness32bit(block_offset + 0x04,streamFile)) /* size is always LE, except in early SS/MAC */
+        if (vgmstream->codec_config & 0x02) /* size is always LE, except in early SS/MAC */
             block_size = read_32bitBE(block_offset + 0x04,streamFile);
         else
             block_size = read_32bitLE(block_offset + 0x04,streamFile);
@@ -33,10 +33,15 @@ void block_update_ea_schl(off_t block_offset, VGMSTREAM * vgmstream) {
             case 0x5344454E: /* "SDEN" */
             case 0x53444652: /* "SDFR" */
             case 0x53444745: /* "SDGE" */
+            case 0x53444445: /* "SDDE" */
             case 0x53444954: /* "SDIT" */
             case 0x53445350: /* "SDSP" */
+            case 0x53444553: /* "SDES" */
+            case 0x53444D58: /* "SDMX" */
             case 0x53445255: /* "SDRU" */
             case 0x53444A41: /* "SDJA" */
+            case 0x53444A50: /* "SDJP" */
+            case 0x5344504C: /* "SDPL" */
                 /* audio chunk */
                 if (vgmstream->coding_type == coding_PSX)
                     block_samples = ps_bytes_to_samples(block_size-0x10, vgmstream->channels);
@@ -180,7 +185,7 @@ void block_update_ea_schl(off_t block_offset, VGMSTREAM * vgmstream) {
             }
 
             /* read ADPCM history before each channel if needed (not actually read in sx.exe) */
-            if (vgmstream->codec_version == 1) {
+            if (vgmstream->codec_config & 0x01) {
                 for (i = 0; i < vgmstream->channels; i++) {
                     //vgmstream->ch[i].adpcm_history1_32 = read_16bit(vgmstream->ch[i].offset+0x00,streamFile);
                     //vgmstream->ch[i].adpcm_history3_32 = read_16bit(vgmstream->ch[i].offset+0x02,streamFile);

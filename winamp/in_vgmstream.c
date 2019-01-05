@@ -20,15 +20,19 @@
 #include <commctrl.h>
 #include <stdio.h>
 #include <io.h>
+#include <string.h>
+#include <ctype.h>
 #include <shlwapi.h>
 #include <strsafe.h>
 #include <delayimp.h>
 
 #include "../src/vgmstream.h"
-#include "../src/util.h"
+#include "../src/plugins.h"
 #include <sdk/winamp/in2.h>
 #include <sdk/winamp/wa_ipc.h>
 #include <sdk/winamp/ipc_pe.h>
+#include <sdk/nu/AutoChar.h>
+#include <sdk/nu/AutoCharFn.h>
 #include <sdk/nu/ServiceBuilder.h>
 
 #include <api/service/api_service.h>
@@ -49,14 +53,14 @@ extern api_config *configApi;
 #include "resource.h"
 
 #ifndef VERSION
-#define VERSION "2.0"
+#include "../version.h"
 #endif
 
 #ifndef VERSIONW
 #define VERSIONW L"2.0"
 #endif
 
-#define LIBVGMSTREAM_BUILD "1050-1102-g8e16eb1-wacup"
+#define LIBVGMSTREAM_BUILD "1050-1102-g9346ae5-wacup"
 #define APP_NAME "vgmstream plugin"
 #define PLUGIN_DESCRIPTION "vgmstream Decoder v" VERSION
 #define PLUGIN_DESCRIPTIONW L"vgmstream Decoder v" VERSIONW
@@ -86,6 +90,7 @@ wchar_t plugindir[MAX_PATH] = {0};
 #define IGNORE_LOOP_INI_ENTRY TEXT("ignore_loop")
 #define DISABLE_SUBSONGS_INI_ENTRY TEXT("disable_subsongs")
 #define DOWNMIX_CHANNELS_INI_ENTRY TEXT("downmix_channels")
+#define DISABLE_TAGFILE_INI_ENTRY TEXT("tagfile_disable")
 
 double fade_seconds = 10.0;
 double fade_delay_seconds = 0.0;
@@ -95,6 +100,7 @@ int ignore_loop = 0;
 int disable_subsongs = 0;
 int downmix_channels = 0;
 int loaded_config = 0;
+int tagfile_disable = 0;
 
 // {B6CB4A7C-A8D0-4c55-8E60-9F7A7A23DA0F}
 static const GUID playbackConfigGroupGUID = 
@@ -114,6 +120,8 @@ int decode_pos_samples = 0;
 int stream_length_samples = 0;
 int fade_samples = 0;
 int output_channels = 0;
+
+const wchar_t* tagfile_name = L"!tags.m3u"; //todo make configurable
 
 wchar_t lastfn[MAX_PATH] = {0}; /* name of the currently playing file */
 
@@ -302,6 +310,7 @@ static void cfg_char_to_wchar(TCHAR *wdst, size_t wdstsize, const char *src) {
 #define DEFAULT_IGNORE_LOOP 0
 #define DEFAULT_DISABLE_SUBSONGS 0
 #define DEFAULT_DOWNMIX_CHANNELS 0
+#define DEFAULT_TAGFILE_DISABLE 0
 
 void read_config() {
 	if (!loaded_config) {
@@ -310,23 +319,23 @@ void read_config() {
 
 		loaded_config = 1;
 
-		GetPrivateProfileString(CONFIG_APP_NAME, FADE_SECONDS_INI_ENTRY, DEFAULT_FADE_SECONDS, buf, ARRAYSIZE(buf), get_paths()->plugin_ini_file);
+		GetPrivateProfileString(CONFIG_APP_NAME, FADE_SECONDS_INI_ENTRY, DEFAULT_FADE_SECONDS, buf, ARRAYSIZE(buf), GetPaths()->plugin_ini_file);
 		if (swscanf(buf, L"%lf%n", &fade_seconds, &consumed) < 1 || consumed != wcslen(buf) || fade_seconds < 0) {
 			(void)swscanf(DEFAULT_FADE_SECONDS, L"%lf", &fade_seconds);
 		}
 
-		GetPrivateProfileString(CONFIG_APP_NAME, FADE_DELAY_SECONDS_INI_ENTRY, DEFAULT_FADE_DELAY_SECONDS, buf, ARRAYSIZE(buf), get_paths()->plugin_ini_file);
+		GetPrivateProfileString(CONFIG_APP_NAME, FADE_DELAY_SECONDS_INI_ENTRY, DEFAULT_FADE_DELAY_SECONDS, buf, ARRAYSIZE(buf), GetPaths()->plugin_ini_file);
 		if (swscanf(buf, L"%lf%n", &fade_delay_seconds, &consumed) < 1 || consumed != wcslen(buf)) {
 			(void)swscanf(DEFAULT_FADE_DELAY_SECONDS, L"%lf", &fade_delay_seconds);
 		}
 
-		GetPrivateProfileString(CONFIG_APP_NAME, LOOP_COUNT_INI_ENTRY, DEFAULT_LOOP_COUNT, buf, ARRAYSIZE(buf), get_paths()->plugin_ini_file);
+		GetPrivateProfileString(CONFIG_APP_NAME, LOOP_COUNT_INI_ENTRY, DEFAULT_LOOP_COUNT, buf, ARRAYSIZE(buf), GetPaths()->plugin_ini_file);
 		if (swscanf(buf, L"%lf%n", &loop_count, &consumed) != 1 || consumed != wcslen(buf) || loop_count < 0) {
 			(void)swscanf(DEFAULT_LOOP_COUNT, L"%lf", &loop_count);
 		}
 
-		loop_forever = GetPrivateProfileInt(CONFIG_APP_NAME, LOOP_FOREVER_INI_ENTRY, DEFAULT_LOOP_FOREVER, get_paths()->plugin_ini_file);
-		ignore_loop = GetPrivateProfileInt(CONFIG_APP_NAME, IGNORE_LOOP_INI_ENTRY, DEFAULT_IGNORE_LOOP, get_paths()->plugin_ini_file);
+		loop_forever = GetPrivateProfileInt(CONFIG_APP_NAME, LOOP_FOREVER_INI_ENTRY, DEFAULT_LOOP_FOREVER, GetPaths()->plugin_ini_file);
+		ignore_loop = GetPrivateProfileInt(CONFIG_APP_NAME, IGNORE_LOOP_INI_ENTRY, DEFAULT_IGNORE_LOOP, GetPaths()->plugin_ini_file);
 
 		if (loop_forever && ignore_loop) {
 			_snwprintf(buf, ARRAYSIZE(buf), L"%d", DEFAULT_LOOP_FOREVER);
@@ -337,16 +346,19 @@ void read_config() {
 		}
 
 		disable_subsongs = GetPrivateProfileInt(CONFIG_APP_NAME, DISABLE_SUBSONGS_INI_ENTRY,
-												DEFAULT_DISABLE_SUBSONGS, get_paths()->plugin_ini_file);
+												DEFAULT_DISABLE_SUBSONGS, GetPaths()->plugin_ini_file);
 
 		downmix_channels = GetPrivateProfileInt(CONFIG_APP_NAME, DOWNMIX_CHANNELS_INI_ENTRY,
-												DEFAULT_DOWNMIX_CHANNELS, get_paths()->plugin_ini_file);
+												DEFAULT_DOWNMIX_CHANNELS, GetPaths()->plugin_ini_file);
 		if (downmix_channels < 0) {
 			_snwprintf(buf, ARRAYSIZE(buf), L"%d", DEFAULT_DOWNMIX_CHANNELS);
 			WritePrivateProfileString(CONFIG_APP_NAME, DOWNMIX_CHANNELS_INI_ENTRY,
-									  buf, get_paths()->plugin_ini_file);
+									  buf, GetPaths()->plugin_ini_file);
 			downmix_channels = DEFAULT_DOWNMIX_CHANNELS;
 		}
+
+		tagfile_disable = GetPrivateProfileInt(CONFIG_APP_NAME, DISABLE_TAGFILE_INI_ENTRY,
+											   DEFAULT_TAGFILE_DISABLE, GetPaths()->plugin_ini_file);
 	}
 }
 
@@ -386,6 +398,9 @@ INT_PTR CALLBACK configDlgProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lPara
 					CheckDlgButton(hDlg, IDC_DISABLE_SUBSONGS, BST_CHECKED);
 
 				SetDlgItemInt(hDlg, IDC_DOWNMIX_CHANNELS, downmix_channels, TRUE);
+
+				if (tagfile_disable)
+					CheckDlgButton(hDlg, IDC_TAGFILE_DISABLE, BST_CHECKED);
 			}
             break;
         case WM_COMMAND:
@@ -438,22 +453,22 @@ INT_PTR CALLBACK configDlgProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lPara
                         fade_seconds = temp_fade_seconds;
                         _snwprintf(buf, ARRAYSIZE(buf), L"%.2lf", fade_seconds);
 						WritePrivateProfileString(CONFIG_APP_NAME, FADE_SECONDS_INI_ENTRY,
-												  buf, get_paths()->plugin_ini_file);
+												  buf, GetPaths()->plugin_ini_file);
 
                         fade_delay_seconds = temp_fade_delay_seconds;
                         _snwprintf(buf, ARRAYSIZE(buf), L"%.2lf", fade_delay_seconds);
 						WritePrivateProfileString(CONFIG_APP_NAME, FADE_DELAY_SECONDS_INI_ENTRY,
-												  buf, get_paths()->plugin_ini_file);
+												  buf, GetPaths()->plugin_ini_file);
 
                         loop_count = temp_loop_count;
                         _snwprintf(buf, ARRAYSIZE(buf), L"%.2lf", loop_count);
 						WritePrivateProfileString(CONFIG_APP_NAME, LOOP_COUNT_INI_ENTRY,
-												  buf, get_paths()->plugin_ini_file);
+												  buf, GetPaths()->plugin_ini_file);
 
                         downmix_channels = temp_downmix_channels;
                         _snwprintf(buf, ARRAYSIZE(buf), L"%d", downmix_channels);
                         WritePrivateProfileString(CONFIG_APP_NAME, DOWNMIX_CHANNELS_INI_ENTRY,
-												  buf, get_paths()->plugin_ini_file);
+												  buf, GetPaths()->plugin_ini_file);
                     }
 					/* pass through */
                 case IDCANCEL:
@@ -469,12 +484,12 @@ INT_PTR CALLBACK configDlgProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lPara
                         loop_forever = (IsDlgButtonChecked(hDlg, IDC_LOOP_FOREVER) == BST_CHECKED);
                         _snwprintf(buf, ARRAYSIZE(buf), L"%d", loop_forever);
 						WritePrivateProfileString(CONFIG_APP_NAME, LOOP_FOREVER_INI_ENTRY,
-												  buf, get_paths()->plugin_ini_file);
+												  buf, GetPaths()->plugin_ini_file);
 
                         ignore_loop = (IsDlgButtonChecked(hDlg, IDC_IGNORE_LOOP) == BST_CHECKED);
                         _snwprintf(buf, ARRAYSIZE(buf), L"%d", ignore_loop);
 						WritePrivateProfileString(CONFIG_APP_NAME, IGNORE_LOOP_INI_ENTRY,
-												  buf, get_paths()->plugin_ini_file);
+												  buf, GetPaths()->plugin_ini_file);
 						break;
 					}
 				case IDC_DISABLE_SUBSONGS:
@@ -483,7 +498,16 @@ INT_PTR CALLBACK configDlgProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lPara
 						disable_subsongs = (IsDlgButtonChecked(hDlg, IDC_DISABLE_SUBSONGS) == BST_CHECKED);
                         _snwprintf(buf, ARRAYSIZE(buf), L"%d", disable_subsongs);
 						WritePrivateProfileString(CONFIG_APP_NAME, DISABLE_SUBSONGS_INI_ENTRY,
-												  buf, get_paths()->plugin_ini_file);
+												  buf, GetPaths()->plugin_ini_file);
+						break;
+					}
+				case IDC_TAGFILE_DISABLE:
+					{
+						wchar_t buf[256] = {0};
+						tagfile_disable = (IsDlgButtonChecked(hDlg, IDC_TAGFILE_DISABLE) == BST_CHECKED);
+                        _snwprintf(buf, ARRAYSIZE(buf), L"%d", tagfile_disable);
+						WritePrivateProfileString(CONFIG_APP_NAME, DISABLE_TAGFILE_INI_ENTRY,
+												  buf, GetPaths()->plugin_ini_file);
 						break;
 					}
                 case IDC_DEFAULT_BUTTON:
@@ -500,8 +524,10 @@ INT_PTR CALLBACK configDlgProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lPara
 
 						SetDlgItemInt(hDlg, IDC_DOWNMIX_CHANNELS, DEFAULT_DOWNMIX_CHANNELS, TRUE);
 
+						CheckDlgButton(hDlg, IDC_TAGFILE_DISABLE, BST_UNCHECKED);
+
 						// physically remove the section from the ini file as it's quicker
-						WritePrivateProfileString(CONFIG_APP_NAME, 0, 0, get_paths()->plugin_ini_file);
+						WritePrivateProfileString(CONFIG_APP_NAME, 0, 0, GetPaths()->plugin_ini_file);
 						break;
 					}
                 default:
@@ -531,8 +557,10 @@ static int split_subsongs(const in_char * filename, int stream_index, VGMSTREAM 
     int i, playlist_index;
     HWND hPlaylistWindow;
 
-    if (disable_subsongs || vgmstream->num_streams <= 1 || (vgmstream->num_streams > 1 && stream_index > 0))
-        return 0; /* no split if no subsongs or playing a subsong */
+    if (disable_subsongs || vgmstream->num_streams <= 1)
+        return 0; /* don't split if no subsongs */
+    if (stream_index > 0 || vgmstream->stream_index > 0)
+        return 0; /* no split if already playing subsong */
 
     hPlaylistWindow = (HWND)SendMessage(plugin.hMainWindow, WM_WA_IPC, IPC_GETWND_PE, IPC_GETWND);
     playlist_index = SendMessage(plugin.hMainWindow, WM_WA_IPC, 0, IPC_GETLISTPOS);
@@ -566,6 +594,7 @@ static int split_subsongs(const in_char * filename, int stream_index, VGMSTREAM 
     /* autoplay doesn't always advance to the first unpacked track, manually fails too */
     //SendMessage(input_module.hMainWindow,WM_WA_IPC,playlist_index,IPC_SETPLAYLISTPOS);
     //SendMessage(input_module.hMainWindow,WM_WA_IPC,0,IPC_STARTPLAY);
+
     return 1;
 }
 
@@ -579,7 +608,6 @@ static int parse_fn_string(const in_char * fn, const in_char * tag, in_char * ds
         return 1;
     }
 
-    //todo actually find + read tags
     dst[0] = '\0';
     return 0;
 }
@@ -687,7 +715,7 @@ void about(HWND hwndParent)
 {
 	// TODO need to ensure that we keep the build # correct
     AboutMessageBox(hwndParent, PLUGIN_DESCRIPTIONW L"\n\n"
-					L"Copyright © 2008-2018 hcs, FastElbja, manakoAT, bxaimc,\n"
+					L"Copyright © 2008-2019 hcs, FastElbja, manakoAT, bxaimc,\n"
 					L"snakemeat, soneek, kode54, bnnm and all other contributors.\n\n"
 					L"WACUP integration updates by Darren Owen aka DrO\n\n"
 					L"Build date: " TEXT(__DATE__) L"\n\n"
@@ -1182,7 +1210,7 @@ char *AutoChar(const wchar_t *convert/*, UINT codePage = CP_ACP, UINT flags = 0*
 	}
 	else
 	{
-		char *narrow = (char *)malloc(size);
+		char *narrow = (char *)calloc(size, sizeof(char));
 		if (narrow)
 		{
 			if (!WideCharToMultiByte(CP_ACP, 0, convert, -1, narrow, size, NULL, NULL))
@@ -1214,7 +1242,7 @@ wchar_t *AutoWide(const char *convert)
 		}
 		else
 		{
-			wchar_t *wide = (wchar_t *)malloc(size << 1);
+			wchar_t *wide = (wchar_t *)calloc(size, sizeof(wchar_t));
 			if (wide)
 			{
 				if (!MultiByteToWideChar(CP_ACP, 0, convert, -1, wide,size))
@@ -1230,19 +1258,6 @@ wchar_t *AutoWide(const char *convert)
 			return wide;
 		}
 	}
-}
-
-extern "C" __declspec(dllexport) int winampUninstallPlugin(HINSTANCE hDllInst, HWND hwndDlg, int param)
-{
-	// TODO
-	// prompt to remove our settings with default as no (just incase)
-	/*if (MessageBox( hwndDlg, WASABI_API_LNGSTRINGW( IDS_UNINSTALL_SETTINGS_PROMPT ),
-				    pluginTitle, MB_YESNO | MB_DEFBUTTON2 ) == IDYES ) {
-		WritePrivateProfileString(CONFIG_APP_NAME, 0, 0, get_paths()->plugin_ini_file);
-	}*/
-
-	// as we're not hooking anything and have no settings we can support an on-the-fly uninstall action
-	return IN_PLUGIN_UNINSTALL_NOW;
 }
 
 // return 1 if you want winamp to show it's own file info dialogue, 0 if you want to show your own (via In_Module.InfoBox)
@@ -1263,6 +1278,153 @@ extern "C" __declspec(dllexport) HWND winampAddUnifiedFileInfoPane(int n, const 
 																   HWND parent, wchar_t *name, size_t namelen)
 {
 	return NULL;
+}
+
+/* ************************************* */
+/* IN_TAGS                               */
+/* ************************************* */
+
+/* could malloc and stuff but totals aren't much bigger than PATH_LIMITs anyway */
+#define WINAMP_TAGS_ENTRY_MAX      30
+#define WINAMP_TAGS_ENTRY_SIZE     2048
+
+typedef struct {
+    int loaded;
+    in_char filename[PATH_LIMIT]; /* tags are loaded for this file */
+    int tag_count;
+
+    char keys[WINAMP_TAGS_ENTRY_MAX][WINAMP_TAGS_ENTRY_SIZE+1];
+    char vals[WINAMP_TAGS_ENTRY_MAX][WINAMP_TAGS_ENTRY_SIZE+1];
+} winamp_tags;
+
+winamp_tags last_tags;
+
+
+/* Loads all tags for a filename in a temp struct to improve performance, as
+ * Winamp requests one tag at a time and may reask for the same tag several times */
+static void load_tagfile_info(in_char *filename) {
+    STREAMFILE *tagFile = NULL;
+    in_char filename_clean[PATH_LIMIT];
+    char filename_utf8[PATH_LIMIT];
+    char tagfile_path_utf8[PATH_LIMIT];
+    in_char tagfile_path_i[PATH_LIMIT];
+    char *path;
+
+
+    if (tagfile_disable) { /* reset values if setting changes during play */
+        last_tags.loaded = 0;
+        last_tags.tag_count = 0;
+        return;
+    }
+
+    /* clean extra part for subsong tags */
+    parse_fn_string(filename, NULL, filename_clean,PATH_LIMIT);
+
+    if (wcscmp(last_tags.filename, filename_clean) == 0) {
+        return; /* not changed, tags still apply */
+    }
+
+    last_tags.loaded = 0;
+
+    /* tags are now for this filename, find tagfile path */
+    wa_wchar_to_char(filename_utf8, PATH_LIMIT, filename_clean);
+    strcpy(tagfile_path_utf8,filename_utf8);
+
+    path = strrchr(tagfile_path_utf8,'\\');
+    if (path != NULL) {
+        path[1] = '\0'; /* includes "\", remove after that from tagfile_path */
+        strcat(tagfile_path_utf8,AutoChar(tagfile_name));
+    }
+    else { /* ??? */
+        strncpy(tagfile_path_utf8,AutoChar(tagfile_name),ARRAYSIZE(tagfile_path_utf8));
+    }
+    wa_char_to_wchar(tagfile_path_i, PATH_LIMIT, tagfile_path_utf8);
+
+    wcsncpy(last_tags.filename, filename_clean, ARRAYSIZE(last_tags.filename));
+    last_tags.tag_count = 0;
+
+    /* load all tags from tagfile */
+    tagFile = open_winamp_streamfile_by_wpath(tagfile_path_i);
+    if (tagFile != NULL) {
+		VGMSTREAM_TAGS tag = {0};
+        int i;
+
+        vgmstream_tags_reset(&tag, filename_utf8);
+        while (vgmstream_tags_next_tag(&tag, tagFile)) {
+            int repeated_tag = 0;
+            int current_tag = last_tags.tag_count;
+            if (current_tag >= WINAMP_TAGS_ENTRY_MAX)
+                continue;
+
+            /* should overwrite repeated tags as global tags may appear multiple times */
+            for (i = 0; i < current_tag; i++) {
+                if (strcmp(last_tags.keys[i], tag.key) == 0) {
+                    current_tag = i;
+                    repeated_tag = 1;
+                    break;
+                }
+            }
+
+            last_tags.keys[current_tag][0] = '\0';
+            strncat(last_tags.keys[current_tag], tag.key, WINAMP_TAGS_ENTRY_SIZE);
+            last_tags.vals[current_tag][0] = '\0';
+            strncat(last_tags.vals[current_tag], tag.val, WINAMP_TAGS_ENTRY_SIZE);
+            if (!repeated_tag)
+                last_tags.tag_count++;
+        }
+
+        close_streamfile(tagFile);
+        last_tags.loaded = 1;
+    }
+}
+
+/* Winamp repeatedly calls this for every known tag currently used in the Advanced Title Formatting (ATF)
+ * config, 'metadata' being the requested tag. Returns 0 on failure/tag not found.
+ * May be called again after certain actions (adding file to playlist, Play, GetFileInfo, etc), and
+ * doesn't seem the plugin can tell Winamp all tags it supports at once or use custom tags. */
+//todo unicode stuff could be improved... probably
+static int winampGetExtendedFileInfo_common(in_char *filename, char *metadata, char* ret, int retlen) {
+    int i, tag_found;
+    int max_len;
+
+    /* load list current tags, if necessary */
+    load_tagfile_info(filename);
+    if (!last_tags.loaded) /* tagfile not found, fail so default get_title takes over */
+        goto fail;
+
+    /* always called (value in ms), must return ok so other tags get called */
+    if (strcasecmp(metadata, "length") == 0) {
+        strcpy(ret, "0");//todo should export but shows GetFileInfo's ms if not provided
+        return 1;
+    }
+
+#if 0
+    /* special case to fill WA5's unified dialog */
+    if (strcasecmp(metadata, "formatinformation") == 0) {
+        generate_format_string(...);
+    }
+#endif
+
+
+    /* find requested tag */
+    tag_found = 0;
+    max_len = (retlen > 0) ? retlen-1 : retlen;
+    for (i = 0; i < last_tags.tag_count; i++) {
+        if (strcasecmp(metadata,last_tags.keys[i]) == 0) {
+            ret[0] = '\0';
+            strncat(ret, last_tags.vals[i], max_len);
+            tag_found = 1;
+            break;
+        }
+    }
+
+    if (!tag_found)
+        goto fail;
+
+    return 1;
+
+fail:
+    return 0;
 }
 
 extern "C" __declspec (dllexport) int winampGetExtendedFileInfoW(wchar_t *filename, char *metadata, wchar_t *ret, int retlen)
@@ -1341,31 +1503,46 @@ extern "C" __declspec (dllexport) int winampGetExtendedFileInfoW(wchar_t *filena
 			}
 		}
 	}
-	else if (!_stricmp (metadata, "length"))
+
+	// depending on what the user has set we want to at
+	// least provide something so the playlist is nicer
+	if (tagfile_disable)
 	{
-		char *fn = AutoChar(filename);
-		if (fn)
+		if (!_stricmp (metadata, "length"))
 		{
-			VGMSTREAM * infostream = init_vgmstream(fn);
-			if (!infostream)
+			char *fn = AutoChar(filename);
+			if (fn)
 			{
-				free(fn);
-			}
-			else
-			{
-				_itow_s(get_vgmstream_play_samples(loop_count, fade_seconds, fade_delay_seconds, infostream) *
-												   1000LL / infostream->sample_rate, ret, retlen, 10);
-				close_vgmstream(infostream);
-				infostream = NULL;
-				retval = 1;
+				VGMSTREAM * infostream = init_vgmstream(fn);
+				if (!infostream)
+				{
+					free(fn);
+				}
+				else
+				{
+					_itow_s(get_vgmstream_play_samples(loop_count, fade_seconds, fade_delay_seconds, infostream) *
+													   1000LL / infostream->sample_rate, ret, retlen, 10);
+					close_vgmstream(infostream);
+					infostream = NULL;
+					retval = 1;
+				}
 			}
 		}
+		else if (!_stricmp (metadata, "title"))
+		{
+			wcsncpy(ret, filename, retlen);
+			PathStripPath(ret);
+			PathRemoveExtension(ret);
+		}
 	}
-	else if (!_stricmp (metadata, "title"))
+	else
 	{
-		wcsncpy(ret, filename, retlen);
-		PathStripPath(ret);
-		PathRemoveExtension(ret);
+		char ret_utf8[2048] = {0};
+		retval = winampGetExtendedFileInfo_common(filename, metadata, ret_utf8, ARRAYSIZE(ret_utf8));
+		if (retval)
+		{
+			wa_char_to_wchar(ret, retlen, ret_utf8);
+		}
 	}
 
 	return retval;
@@ -1393,6 +1570,20 @@ extern "C" __declspec(dllexport) void winampGetExtendedRead_close(intptr_t handl
 {
 }
 
+extern "C" __declspec(dllexport) int winampUninstallPlugin(HINSTANCE hDllInst, HWND hwndDlg, int param)
+{
+	// TODO
+	// prompt to remove our settings with default as no (just incase)
+	/*if (MessageBox( hwndDlg, WASABI_API_LNGSTRINGW( IDS_UNINSTALL_SETTINGS_PROMPT ),
+				    pluginTitle, MB_YESNO | MB_DEFBUTTON2 ) == IDYES ) {
+		WritePrivateProfileString(CONFIG_APP_NAME, 0, 0, GetPaths()->plugin_ini_file);
+	}*/
+
+	// as we're not hooking anything and have no settings we can support an on-the-fly uninstall action
+	return IN_PLUGIN_UNINSTALL_NOW;
+}
+
+
 /* *********************************** */
 
 FARPROC WINAPI FailHook(unsigned dliNotify, PDelayLoadInfo pdli) {
@@ -1402,7 +1593,7 @@ FARPROC WINAPI FailHook(unsigned dliNotify, PDelayLoadInfo pdli) {
 				 filepath[MAX_PATH] = {0};
 
 		if (!plugindir[0]) {
-			PathCombine(plugindir, get_paths()->winamp_plugin_dir, L"vgmstream_dlls");
+			PathCombine(plugindir, GetPaths()->winamp_plugin_dir, L"vgmstream_dlls");
 		}
 
 		// we look for the plug-in in the vgmstream_dlls

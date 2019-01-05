@@ -1,7 +1,19 @@
 #ifndef _FOO_VGMSTREAM_
 #define _FOO_VGMSTREAM_
 
-#define OUTBUF_SIZE     1024        /* Samples */
+#define SAMPLE_BUFFER_SIZE     1024
+
+/* current song settings */
+typedef struct {
+    int song_play_forever;
+    double song_loop_count;
+    double song_fade_time;
+    double song_fade_delay;
+    int song_ignore_loop;
+    int song_really_force_loop;
+    int song_ignore_fade;
+} foobar_song_config;
+
 
 class input_vgmstream : public input_stubs {
     public:
@@ -51,9 +63,9 @@ class input_vgmstream : public input_stubs {
         int stream_length_samples;
         int fade_samples;
         int seek_pos_samples;
-        short sample_buffer[OUTBUF_SIZE];
+        short sample_buffer[SAMPLE_BUFFER_SIZE];
 
-        /* config */
+        /* settings */
         double fade_seconds;
         double fade_delay_seconds;
         double loop_count;
@@ -62,6 +74,12 @@ class input_vgmstream : public input_stubs {
         int ignore_loop;
         bool disable_subsongs;
         int downmix_channels;
+        bool tagfile_disable;
+        pfc::string8 tagfile_name;
+        bool override_title;
+
+        /* song config */
+        foobar_song_config config;
 
         /* helpers */
         VGMSTREAM * init_vgmstream_foo(t_uint32 p_subsong, const char * const filename, abort_callback & p_abort);
@@ -69,6 +87,8 @@ class input_vgmstream : public input_stubs {
         void load_settings();
         void get_subsong_info(t_uint32 p_subsong, pfc::string_base & title, int *length_in_ms, int *total_samples, int *loop_start, int *loop_end, int *sample_rate, int *channels, int *bitrate, pfc::string_base & description, abort_callback & p_abort);
         bool get_description_tag(pfc::string_base & temp, pfc::string_base const& description, const char *tag, char delimiter = '\n');
+        void set_config_defaults(foobar_song_config *current);
+        void apply_config(VGMSTREAM * vgmstream, foobar_song_config *current);
 };
 
 /* foo_streamfile.cpp */

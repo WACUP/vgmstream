@@ -111,11 +111,6 @@ VGMSTREAM * init_vgmstream_sgxd(STREAMFILE *streamFile) {
     if (name_offset)
         read_string(vgmstream->stream_name,STREAM_NAME_SIZE, name_offset,streamHeader);
 
-    /* needs -1 to match RIFF AT3's loop chunk
-     * (maybe SGXD = "loop before this sample" rather than "loop after this sample" as expected by vgmstream) */
-    if (vgmstream->loop_end_sample > 0)
-        vgmstream->loop_end_sample -= 1;
-
     switch (type) {
         case 0x03:      /* PS-ADPCM [Genji (PS3), Ape Escape Move (PS3)]*/
             vgmstream->coding_type = coding_PSX;
@@ -139,21 +134,9 @@ VGMSTREAM * init_vgmstream_sgxd(STREAMFILE *streamFile) {
             vgmstream->coding_type = coding_FFmpeg;
             vgmstream->layout_type = layout_none;
 
-            /* manually read skip_samples if FFmpeg didn't do it */
-            if (ffmpeg_data->skipSamples <= 0) {
-                off_t chunk_offset;
-                size_t chunk_size, fact_skip_samples = 0;
-                if (!find_chunk_le(streamFile, 0x66616374,start_offset+0xc,0, &chunk_offset,&chunk_size)) /* find "fact" */
-                    goto fail;
-                if (chunk_size == 0x8) {
-                    fact_skip_samples  = read_32bitLE(chunk_offset+0x4, streamFile);
-                } else if (chunk_size == 0xc) {
-                    fact_skip_samples  = read_32bitLE(chunk_offset+0x8, streamFile);
-                }
-                ffmpeg_set_skip_samples(ffmpeg_data, fact_skip_samples);
-            }
+            if (ffmpeg_data->skipSamples <= 0) /* in case FFmpeg didn't get them */
+                ffmpeg_set_skip_samples(ffmpeg_data, riff_get_fact_skip_samples(streamFile, start_offset));
             /* SGXD loop/sample values are relative (without skip samples) vs RIFF (with skip samples), no need to adjust */
-
             break;
         }
 #endif

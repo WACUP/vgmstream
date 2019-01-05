@@ -14,6 +14,7 @@
 
 extern "C" {
 #include "../src/vgmstream.h"
+#include "../src/plugins.h"
 }
 #include "foo_vgmstream.h"
 #include "foo_filetypes.h"
@@ -58,6 +59,9 @@ input_vgmstream::input_vgmstream() {
     ignore_loop = 0;
     disable_subsongs = false;
     downmix_channels = 0;
+    tagfile_disable = false;
+    tagfile_name = "!tags.m3u"; //todo make configurable
+    override_title = false;
 
     load_settings();
 }
@@ -76,15 +80,6 @@ void input_vgmstream::open(service_ptr_t<file> p_filehint,const char * p_path,t_
     }
 
     filename = p_path;
-
-    /* KLUDGE */
-    if ( !pfc::stricmp_ascii( pfc::string_extension(filename), "MUS" ) )
-    {
-        unsigned char buffer[ 4 ];
-        if ( p_filehint.is_empty() ) input_open_file_helper( p_filehint, filename, p_reason, p_abort );
-        p_filehint->read_object_t( buffer, p_abort );
-        if ( !memcmp( buffer, "MUS\x1A", 4 ) ) throw exception_io_unsupported_format();
-    }
 
 
     // keep file stats around (timestamp, filesize)
@@ -142,18 +137,59 @@ void input_vgmstream::get_info(t_uint32 p_subsong, file_info & p_info, abort_cal
 
     get_subsong_info(p_subsong, temp, &length_in_ms, &total_samples, &loop_start, &loop_end, &samplerate, &channels, &bitrate, description, p_abort);
 
-    if (get_subsong_count() > 1) {
+
+    /* set tag info (metadata tab in file properties) */
+
+    /* Shows a custom subsong title by default with subsong name, to simplify for average users.
+     * This can be overriden and extended and using the exported STREAM_x below and foobar's formatting.
+     * foobar defaults to filename minus extension if there is no meta "title" value. */
+    if (!override_title && get_subsong_count() > 1) {
         p_info.meta_set("TITLE",temp);
     }
+    if (get_description_tag(temp,description,"stream count: ")) p_info.meta_set("stream_count",temp);
+    if (get_description_tag(temp,description,"stream index: ")) p_info.meta_set("stream_index",temp);
+    if (get_description_tag(temp,description,"stream name: ")) p_info.meta_set("stream_name",temp);
 
-    p_info.info_set("vgmstream version",PLUGIN_VERSION);
+    /* get external file tags */
+    //todo optimize and don't parse tags again for this session (not sure how), seems foobar
+    // calls get_info on every play even if the file hasn't changes, and won't refresh "meta"
+    // unless forced or closing playlist+exe
+    if (!tagfile_disable) {
+        //todo use foobar's fancy-but-arcane string functions
+        char tagfile_path[PATH_LIMIT];
+        strcpy(tagfile_path, filename);
 
+        char *path = strrchr(tagfile_path,'\\');
+        if (path!=NULL) {
+            path[1] = '\0';  /* includes "\", remove after that from tagfile_path */
+            strcat(tagfile_path,tagfile_name);
+        }
+        else { /* ??? */
+            strcpy(tagfile_path,tagfile_name);
+        }
+
+        STREAMFILE *tagFile = open_foo_streamfile(tagfile_path, &p_abort, &stats);
+        if (tagFile != NULL) {
+            VGMSTREAM_TAGS tag;
+            vgmstream_tags_reset(&tag, filename);
+            while (vgmstream_tags_next_tag(&tag, tagFile)) {
+                p_info.meta_set(tag.key,tag.val);
+            }
+
+            close_streamfile(tagFile);
+        }
+    }
+
+
+    /* set technical info (details tab in file properties) */
+
+    p_info.info_set("vgmstream_version",PLUGIN_VERSION);
     p_info.info_set_int("samplerate", samplerate);
     p_info.info_set_int("channels", channels);
     p_info.info_set_int("bitspersample",16);
-    /* not quite accurate but some people are confused by this
+    /* not quite accurate but some people are confused by "lossless"
      * (could set lossless if PCM, but then again PCMFloat or PCM8 are converted/"lossy" in vgmstream) */
-    p_info.info_set("encoding","lossy");
+    p_info.info_set("encoding","lossy/lossless");
     p_info.info_set_bitrate(bitrate / 1000);
     if (total_samples > 0)
         p_info.info_set_int("stream_total_samples", total_samples);
@@ -201,7 +237,7 @@ bool input_vgmstream::decode_run(audio_chunk & p_chunk,abort_callback & p_abort)
     t_size bytes;
 
     {
-        bool loop_okay = loop_forever && vgmstream->loop_flag && !ignore_loop && !force_ignore_loop;
+        bool loop_okay = config.song_play_forever && vgmstream->loop_flag && !config.song_ignore_loop && !force_ignore_loop;
         if (decode_pos_samples+max_buffer_samples>stream_length_samples && !loop_okay)
             samples_to_do=stream_length_samples-decode_pos_samples;
         else
@@ -234,7 +270,7 @@ bool input_vgmstream::decode_run(audio_chunk & p_chunk,abort_callback & p_abort)
 
         /* downmix enabled (foobar refuses to do more than 8 channels) */
         if (downmix_channels > 0 && downmix_channels < vgmstream->channels) {
-            short temp_buffer[OUTBUF_SIZE];
+            short temp_buffer[SAMPLE_BUFFER_SIZE];
             int s, ch;
 
             for (s = 0; s < samples_to_do; s++) {
@@ -275,7 +311,7 @@ bool input_vgmstream::decode_run(audio_chunk & p_chunk,abort_callback & p_abort)
 void input_vgmstream::decode_seek(double p_seconds,abort_callback & p_abort) {
     seek_pos_samples = (int) audio_math::time_to_samples(p_seconds, vgmstream->sample_rate);
     int max_buffer_samples = sizeof(sample_buffer)/sizeof(sample_buffer[0])/vgmstream->channels;
-    bool loop_okay = loop_forever && vgmstream->loop_flag && !ignore_loop && !force_ignore_loop;
+    bool loop_okay = config.song_play_forever && vgmstream->loop_flag && !config.song_ignore_loop && !force_ignore_loop;
 
     int corrected_pos_samples = seek_pos_samples;
 
@@ -296,8 +332,8 @@ void input_vgmstream::decode_seek(double p_seconds,abort_callback & p_abort) {
     // Reset of backwards seek
     else if(corrected_pos_samples < decode_pos_samples) {
         reset_vgmstream(vgmstream);
-        vgmstream->loop_target = 0;
-        if (ignore_loop) vgmstream->loop_flag = 0;
+        apply_config(vgmstream, &config); /* config is undone by reset */
+
         decode_pos_samples = 0;
     }
 
@@ -344,8 +380,8 @@ bool input_vgmstream::g_is_our_path(const char * p_path,const char * p_extension
             return 1;
     }
 
+    /* some extensionless files can be handled by vgmstream, try to play */
     if (strlen(p_extension) <= 0) {
-        // Last Of Us speech files have no file extension
         return 1;
     }
 
@@ -388,21 +424,20 @@ void input_vgmstream::setup_vgmstream(abort_callback & p_abort) {
     if (subsong == 0)
         subsong = 1;
 
-
-    if (ignore_loop)
-        vgmstream->loop_flag = 0;
+    set_config_defaults(&config);
+    apply_config(vgmstream, &config);
 
     decode_pos_ms = 0;
     decode_pos_samples = 0;
     paused = 0;
-    stream_length_samples = get_vgmstream_play_samples(loop_count,fade_seconds,fade_delay_seconds,vgmstream);
-    vgmstream->loop_target = 0;
-
-    fade_samples = (int)(fade_seconds * vgmstream->sample_rate);
+    stream_length_samples = get_vgmstream_play_samples(config.song_loop_count,config.song_fade_time,config.song_fade_delay,vgmstream);
+    fade_samples = (int)(config.song_fade_time * vgmstream->sample_rate);
 }
 
 void input_vgmstream::get_subsong_info(t_uint32 p_subsong, pfc::string_base & title, int *length_in_ms, int *total_samples, int *loop_start, int *loop_end, int *sample_rate, int *channels, int *bitrate, pfc::string_base & description, abort_callback & p_abort) {
     VGMSTREAM * infostream = NULL;
+    bool is_infostream = false;
+    foobar_song_config infoconfig;
     char temp[1024];
 
     // reuse current vgmstream if not querying a new subsong
@@ -410,17 +445,24 @@ void input_vgmstream::get_subsong_info(t_uint32 p_subsong, pfc::string_base & ti
     // there is no need to recreate the infostream, there is only one subsong used
     if (subsong != p_subsong && !direct_subsong) {
         infostream = init_vgmstream_foo(p_subsong, filename, p_abort);
+        if (!infostream) {
+            throw exception_io_data();
+        }
+        set_config_defaults(&infoconfig);
+        apply_config(infostream,&infoconfig);
+        is_infostream = true;
     } else {
         // vgmstream ready as get_info is valid after open() with any reason
         infostream = vgmstream;
+        infoconfig = config;
     }
 
 
     if (length_in_ms) {
         *length_in_ms = -1000;
         if (infostream) {
-            *length_in_ms = get_vgmstream_play_samples(loop_count,fade_seconds,fade_delay_seconds,infostream)*1000LL/infostream->sample_rate;
-            infostream->loop_target = 0;
+            int num_samples = get_vgmstream_play_samples(infoconfig.song_loop_count,infoconfig.song_fade_time,infoconfig.song_fade_delay,infostream);
+            *length_in_ms = num_samples*1000LL / infostream->sample_rate;
             *sample_rate = infostream->sample_rate;
             *channels = infostream->channels;
             *total_samples = infostream->num_samples;
@@ -460,7 +502,7 @@ void input_vgmstream::get_subsong_info(t_uint32 p_subsong, pfc::string_base & ti
     }
 
     // and only close if was querying a new subsong
-    if (subsong != p_subsong && !direct_subsong) {
+    if (is_infostream) {
         close_vgmstream(infostream);
         infostream = NULL;
     }
@@ -479,6 +521,60 @@ bool input_vgmstream::get_description_tag(pfc::string_base & temp, pfc::string_b
         return true;
     }
     return false;
+}
+
+void input_vgmstream::set_config_defaults(foobar_song_config *current) {
+    current->song_play_forever = loop_forever;
+    current->song_loop_count = loop_count;
+    current->song_fade_time = fade_seconds;
+    current->song_fade_delay = fade_delay_seconds;
+    current->song_ignore_loop = ignore_loop;
+    current->song_really_force_loop = 0;
+    current->song_ignore_fade = 0;
+}
+
+void input_vgmstream::apply_config(VGMSTREAM * vgmstream, foobar_song_config *current) {
+
+    /* honor suggested config, if any (defined order matters)
+     * note that ignore_fade and play_forever should take priority */
+    if (vgmstream->config_loop_count) {
+        current->song_loop_count = vgmstream->config_loop_count;
+    }
+    if (vgmstream->config_fade_delay) {
+        current->song_fade_delay = vgmstream->config_fade_delay;
+    }
+    if (vgmstream->config_fade_time) {
+        current->song_fade_time = vgmstream->config_fade_time;
+    }
+    if (vgmstream->config_force_loop) {
+        current->song_really_force_loop = 1;
+    }
+    if (vgmstream->config_ignore_loop) {
+        current->song_ignore_loop = 1;
+    }
+    if (vgmstream->config_ignore_fade) {
+        current->song_ignore_fade = 1;
+    }
+
+    /* remove non-compatible options */
+    if (current->song_play_forever) {
+        current->song_ignore_fade = 0;
+        current->song_ignore_loop = 0;
+    }
+
+    /* change loop stuff, in no particular order */
+    if (current->song_really_force_loop) {
+        vgmstream_force_loop(vgmstream, 1, 0,vgmstream->num_samples);
+    }
+    if (current->song_ignore_loop) {
+        vgmstream_force_loop(vgmstream, 0, 0,0);
+        current->song_fade_time = 0;
+    }
+
+    /* loop N times, but also play stream end instead of fading out */
+    if (current->song_loop_count > 0 && current->song_ignore_fade) {
+        vgmstream_set_loop_target(vgmstream, (int)current->song_loop_count);
+    }
 }
 
 GUID input_vgmstream::g_get_guid()

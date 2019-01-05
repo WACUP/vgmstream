@@ -16,16 +16,29 @@
 #include "streamtypes.h"
 #include "util.h"
 
+
+/* MSVC fixes (though mingw uses MSVCRT but not MSC_VER, maybe use AND?) */
 #if defined(__MSVCRT__) || defined(_MSC_VER)
-#include <io.h>
-#define fseeko fseek
-#define ftello ftell
-#define dup _dup
-#ifdef fileno
-#undef fileno
-#endif
-#define fileno _fileno
-#define fdopen _fdopen
+  #include <io.h>
+
+  #ifndef fseeko
+    #define fseeko fseek
+  #endif
+  #ifndef ftello
+    #define ftello ftell
+  #endif
+
+  #define dup _dup
+
+  #ifdef fileno
+  #undef fileno
+  #endif
+  #define fileno _fileno
+  #define fdopen _fdopen
+
+//  #ifndef off64_t
+//    #define off_t __int64
+//  #endif
 #endif
 
 #if defined(XBMC)
@@ -110,6 +123,10 @@ STREAMFILE * open_streamfile_by_ext(STREAMFILE *streamFile, const char * ext);
  * Can be used to get companion files. */
 STREAMFILE * open_streamfile_by_filename(STREAMFILE *streamFile, const char * filename);
 
+/* Reopen a STREAMFILE with a different buffer size, for fine-tuned bigfile parsing.
+ * Uses default buffer size when buffer_size is 0 */
+STREAMFILE * reopen_streamfile(STREAMFILE *streamFile, size_t buffer_size);
+
 
 /* close a file, destroy the STREAMFILE object */
 static inline void close_streamfile(STREAMFILE * streamfile) {
@@ -185,6 +202,12 @@ static inline int guess_endianness32bit(off_t offset, STREAMFILE * streamfile) {
     return ((uint32_t)read_32bitLE(offset,streamfile) > (uint32_t)read_32bitBE(offset,streamfile)) ? 1 : 0;
 }
 
+static inline size_t align_size_to_block(size_t value, size_t block_align) {
+    size_t extra_size = value % block_align;
+    if (extra_size == 0) return value;
+    return (value + block_align - extra_size);
+}
+
 /* various STREAMFILE helpers functions */
 
 size_t get_streamfile_text_line(int dst_length, char * dst, off_t offset, STREAMFILE * streamfile, int *line_done_ptr);
@@ -192,6 +215,8 @@ size_t get_streamfile_text_line(int dst_length, char * dst, off_t offset, STREAM
 size_t read_string(char * buf, size_t bufsize, off_t offset, STREAMFILE *streamFile);
 
 size_t read_key_file(uint8_t * buf, size_t bufsize, STREAMFILE *streamFile);
+
+void fix_dir_separators(char * filename);
 
 int check_extensions(STREAMFILE *streamFile, const char * cmp_exts);
 
@@ -204,4 +229,6 @@ void get_streamfile_filename(STREAMFILE *streamFile, char * buffer, size_t size)
 void get_streamfile_basename(STREAMFILE *streamFile, char * buffer, size_t size);
 void get_streamfile_path(STREAMFILE *streamFile, char * buffer, size_t size);
 void get_streamfile_ext(STREAMFILE *streamFile, char * filename, size_t size);
+
+void dump_streamfile(STREAMFILE *streamFile, const char* out);
 #endif

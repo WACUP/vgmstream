@@ -26,10 +26,18 @@ In the case of the foobar2000 component they are all bundled for convenience,
 or you can get them here: https://github.com/kode54/vgmstream/tree/master/ext_libs
 (bundled here: https://f.losno.co/vgmstream-win32-deps.zip, may not be latest).
 
-Put ```libvorbis.dll```, ```libmpg123-0.dll```, ```libg7221_decode.dll```, ```libg719_decode.dll```,
-```avcodec-vgmstream-58.dll```, ```avformat-vgmstream-58.dll```, ```avutil-vgmstream-56.dll```, ```swresample-vgmstream-3.dll```
-and ```libatrac9.dll``` somewhere Windows can
-find them.
+Put the following files somewhere Windows can find them:
+- `libvorbis.dll`
+- `libmpg123-0.dll`
+- `libg7221_decode.dll`
+- `libg719_decode.dll`
+- `avcodec-vgmstream-58.dll`
+- `avformat-vgmstream-58.dll`
+- `avutil-vgmstream-56.dll`
+- `swresample-vgmstream-3.dll`
+- `libatrac9.dll`
+- `libcelt-0061.dll`
+- `libcelt-0110.dll`
 
 For Winamp/XMPlay/command line this means in the directory with the main .exe,
 or in a system directory, or any other directory in the PATH variable.
@@ -38,25 +46,26 @@ or in a system directory, or any other directory in the PATH variable.
 ```
 Usage: test.exe [-o outfile.wav] [options] infile
 Options:
-    -o outfile.wav: name of output .wav file, default is infile.wav
+    -o outfile.wav: name of output .wav file, default infile.wav
     -l loop count: loop count, default 2.0
-    -f fade time: fade time (seconds), default 10.0
-    -d fade delay: fade delay (seconds, default 0.0
+    -f fade time: fade time in seconds after N loops, default 10.0
+    -d fade delay: fade delay in seconds, default 0.0
+    -F: don't fade after N loops and play the rest of the stream
     -i: ignore looping information and play the whole stream once
+    -e: force end-to-end looping
+    -E: force end-to-end looping even if file has real loop points
+    -s N: select subsong N, if the format supports multiple subsongs
+    -m: print metadata only, don't decode
+    -L: append a smpl chunk and create a looping wav
+    -2 N: only output the Nth (first is 0) set of stereo channels
     -p: output to stdout (for piping into another program)
     -P: output to stdout even if stdout is a terminal
-    -c: loop forever (continuously)
-    -m: print metadata only, don't decode
+    -c: loop forever (continuously) to stdout
     -x: decode and print adxencd command line to encode as ADX
     -g: decode and print oggenc command line to encode as OGG
     -b: decode and print batch variable commands
-    -L: append a smpl chunk and create a looping wav
-    -e: force end-to-end looping
-    -E: force end-to-end looping even if file has real loop points
-    -r outfile2.wav: output a second time after resetting
-    -2 N: only output the Nth (first is 0) set of stereo channels
-    -F: don't fade after N loops and play the rest of the stream
-    -s N: select subtream N, if the format supports multiple streams
+    -r: output a second file after resetting (for testing)
+    -t file: print if tags are found in file
 ```
 Typical usage would be: ```test -o happy.wav happy.adx``` to decode ```happy.adx``` to ```happy.wav```.
 
@@ -113,38 +122,80 @@ standard, whose docs discuss extending M3U with arbitrary tags.
 
 
 ## Special cases
-vgmstream aims to support most file formats as-is, but some files require extra
+vgmstream aims to support most audio formats as-is, but some files require extra
 handling.
 
 ### Renamed files
 A few extensions that vgmstream supports clash with common ones. Since players
-like foobar or Winamp don't react well to that, they may be renamed for
-vgmstream (mainly to get looping in some cases).
-- .aac to .laac
-- .ac3 to .lac3
-- .aif to .aiffl or .aifcl 
-- .asf to .sng (EA formats)
-- .mp4 to .lmp4
-- .ogg to .logg
-- .opus to .lopus
-- .stm to .lstm
-- .wav to .lwav
+like foobar or Winamp don't react well to that, they may be renamed to make
+them playable through vgmstream.
+- .aac to .laac (tri-Ace games)
+- .ac3 to .lac3 (standard AC3)
+- .aif to .aiffl or .aifcl (standard Mac AIF)
+- .asf to .sng (EA games)
+- .flac to .lflac (standard FLAC)
+- .mp2 to .lmp2 (standard MP2)
+- .mp3 to .lmp3 (standard MP3)
+- .mp4 to .lmp4 (standard M4A)
+- .mpc to .lmpc (standard MPC)
+- .ogg to .logg (standard OGG)
+- .opus to .lopus (standard OPUS or Switch OPUS)
+- .stm to .lstm (Rockstar STM)
+- .wav to .lwav (standard WAV)
+- .wma to .lwma (standard WMA)
+- .(any) to .vgmstream (FFmpeg formats or TXTH)
 Command line tools don't have this restriction and will accept the original
 filename.
 
-When extracting from a bigfile sometimes internal files don't have an actual
+The main advantage to rename them is that vgmstream may use the file's
+internal loop info, or apply subtle fixes, but is also limited in some ways
+(like standard/player's tagging).
+
+.vgmstream is a catch-all extension that may work as a last resort to make
+a file playable.
+
+When extracting from a bigfile, sometimes internal files don't have an actual
 name+extension. Those should be renamed to its proper/common extension, as the
 extractor program may guess wrong (like .wav instead of .at3 or .wem). If
-there is no known extension usually the header id is used instead.
+there is no known extension, usually the header id string may be used instead.
 
-### Loop assists
+Note that vgmstream also accepts certain extension-less files too.
+
+### Demuxed videos
+vgmstream also supports audio from videos, but usually must be demuxed (extracted
+without modification) first, since vgmstream doesn't attempt to support them.
+
+The easiest way to do this is using VGMToolBox's "Video Demultiplexer" option
+for common game video formats (.bik, .vp6, .pss, .pam, .pmf, .usm, .xmv, etc).
+
+For standard videos formats (.avi, .mp4, .webm, .m2v, .ogv, etc) not supported
+by VGMToolBox FFmpeg binary may work:
+- `ffmpeg.exe -i (input file) -vn -acodec copy (output file)`
+Output extension may need to be adjusted to some appropriate audio file depending
+on the audio codec used. ffprobe.exe can list this codec, though the correct audio
+extension depends on the video itself (like .avi to .wav/mp2/mp3 or .ogv to .ogg).
+
+Some games use custom video formats, demuxer scripts in .bms format may be found
+on the internet.
+
+### Companion files
 Some formats have companion files with external looping info, and should be
 left together.
 - .mus (playlist for .acm)
-- .pos (loop info for .wav: 32 bit LE loop start sample + loop end sample)
-- .sli (loop info for .ogg)
-- .sfl (loop info for .ogg)
-- .vgmstream + .pos (FFmpeg formats + loop assist)
+- .pos (loop info for .wav, and sometimes .ogg)
+- .ogg.sli or .sli (loop info for .ogg)
+- .ogg.sfl (loop info for .ogg)
+- .vgmstream.pos (loop info for FFmpeg formats)
+  - also possible for certain extensions like .lflac.pos
+
+Similarly some formats split header and/or data in separate files (.sgh+sgd,
+.wav.str+.wav, (file)_L.dsp+(file)_R.dsp, etc). vgmstream will also detect
+and use those as needed and must be tegether, even if only one of the two
+will be used to play.
+
+.pos is a small file with 32 bit little endian values: loop start sample
+and  loop end sample. For FFmpeg formats (.vgmstream.pos) it may optionally 
+have total samples after those.
 
 ### Decryption keys
 Certain formats have encrypted data, and need a key to decrypt. vgmstream
@@ -153,6 +204,7 @@ a companion file:
 - .adx: .adxkey (derived 6 byte key, in start/mult/add format)
 - .ahx: .ahxkey (derived 6 byte key, in start/mult/add format)
 - .hca: .hcakey (8 byte decryption key, a 64-bit number)
+  - May be followed by 2 byte AWB scramble key for newer HCA
 - .fsb: .fsbkey (decryption key, in hex)
 
 The key file can be ".(ext)key" (for the whole folder), or "(name).(ext)key"
@@ -172,10 +224,45 @@ Programs like VGMToolbox can help to create GENH.
 ".txth" or ".(ext).txth" (for the whole folder), or "(name.ext).txth" (for a
 single file). Contains dynamic text commands to read data from the original
 file, or static values.
-  
+
 **TXTP**: a text playlist that works as a single song. Can contain a list of
-filenames to play as one (ex. "intro.vag" "loop.vag"), name with subsong index
-(ex. bgm.sxd#10), or mask channels to only play some (ex. "song.adx#c1,2").
+filenames to play as one (ex. "intro.vag" "loop.vag"), separate channel files
+to join as a single multichannel file, subsong index (ex. bgm.sxd#10), or 
+channel mask to allow only certain channels (ex. "song.adx#c1,2").
+
+Creation of those files is meant for advanced users, docs can be found in
+vgmstream source.
+
+
+## Tagging
+Some of vgmstream's plugins support simple read-only tagging via external files.
+
+Tags are loaded from a text/M3U-like file named _!tags.m3u_ in the song folder.
+You don't have to load your songs with that M3U though (but you can, for pre-made
+ordering), the file itself just 'looks' like an M3U.
+
+Format is:
+```
+# ignored comment
+# $GLOBAL_COMMAND value (extra features)
+# @GLOBAL_TAG value (applies all following tracks)
+
+# %LOCAL_TAG value (applies to next track only)
+filename1
+# %LOCAL_TAG value (applies to next track only)
+filename2
+```
+Accepted tags depend on the player (foobar: any; winamp: see ATF config),
+typically ALBUM/ARTIST/TITLE/DISC/TRACK/COMPOSER/etc, lower or uppercase,
+separated by one or multiple spaces. Repeated tags overwrite previous
+(ex.- may define @COMPOSER for multiple tracks). It only reads up to current
+_filename_ though, so any @TAG below would be ignored.
+
+Playlist formatting should follow player's config. ASCII or UTF-8 tags work.
+
+GLOBAL_COMMANDs currently can be: 
+- AUTOTRACK: sets %TRACK% tag automatically (1..N as files are encountered
+  in the tag file).
 
 
 ## Supported codec types
@@ -192,32 +279,36 @@ are used in few games.
 - Nintendo AFC ADPCM
 - ITU-T G.721
 - CD-ROM XA ADPCM
-- Sony PSX ADPCM a.k.a VAG (standard, badflags, bmdx, configurable)
+- Sony PSX ADPCM a.k.a VAG (standard, badflags, configurable)
 - Sony HEVAG
 - Electronic Arts EA-XA (stereo, mono, Maxis)
 - Electronic Arts EA-XAS
 - DVI/IMA ADPCM (stereo/mono + high/low nibble, 3DS, Omikron, SNDS, etc)
-- Microsoft MS IMA ADPCM (standard, Xbox, NDS, Radical, Wwise, FSB, etc)
-- Microsoft MS ADPCM
-- Westwood VBR ADPCM 
-- Yamaha AICA ADPCM 
-- Procyon Studio ADPCM 
+- Microsoft MS IMA ADPCM (standard, Xbox, NDS, Radical, Wwise, FSB, WV6, etc)
+- Microsoft MS ADPCM (standard, Cricket Audio)
+- Westwood VBR ADPCM
+- Yamaha AICA ADPCM
+- Procyon Studio ADPCM
 - Level-5 0x555 ADPCM
-- Activision EXAKT SASSC DPCM
 - lsf ADPCM
 - Konami MTAF ADPCM
 - Konami MTA2 ADPCM
 - Paradigm MC3 ADPCM
+- FMOD FADPCM 4-bit ADPCM
+- Konami XMD 4-bit ADPCM
+- Argonaut ASF 4-bit ADPCM
+- Circus XPCM ADPCM
+- PC-FX ADPCM
 - SDX2 2:1 Squareroot-Delta-Exact compression DPCM
 - CBD2 2:1 Cuberoot-Delta-Exact compression DPCM
+- Activision EXAKT SASSC DPCM
+- Xilam DERF DPCM
 - InterPlay ACM
 - VisualArt's NWA
-- CRI HCA
 - Electronic Arts MicroTalk a.k.a. UTK or UMT
-- FMOD FADPCM 4-bit ADPCM
+- CRI HCA
 - Xiph Vorbis (Ogg, FSB5, Wwise, OGL, Silicon Knights)
 - MPEG MP1/2/3 (standard, AHX, XVAG, FSB, AWC, P3D, etc)
-- ITU-T G.722.1 (Polycom Siren 7)
 - ITU-T G.722.1 annex C (Polycom Siren 14)
 - ITU G.719 annex B (Polycom Siren 22)
 - Electronic Arts EALayer3
@@ -229,7 +320,8 @@ are used in few games.
 - AAC
 - Bink
 - AC3/SPDIF
-- Xiph Opus (Ogg, Switch)
+- Xiph Opus (Ogg, Switch, EA, UE4, Exient)
+- Xiph CELT (FSB)
 - Musepack
 - FLAC
 - Others
@@ -237,7 +329,7 @@ are used in few games.
 Note that vgmstream doesn't (can't) reproduce in-game music 1:1, as internal
 resampling, filters, volume, etc, are not replicated. Some codecs are not
 fully accurate compared to the games due to minor bugs, but in most cases
-it isn't audible. 
+it isn't audible.
 
 
 ## Supported file types
@@ -481,6 +573,6 @@ This list is not complete and many other files are supported.
 	- .ahxkey (decryption key for .ahx, in start/mult/add format)
     - .hcakey (decryption key for .hca, in HCA Decoder format)
     - .fsbkey (decryption key for .fsb, in hex)
-	- .vgmstream + .pos (FFmpeg formats + loop assist)
+	- .vgmstream + .vgmstream.pos (FFmpeg formats + loop assist)
 
 Enjoy! *hcs*

@@ -9,13 +9,15 @@
 /* a STREAMFILE that operates via standard IO using a buffer */
 typedef struct {
     STREAMFILE sf;          /* callbacks */
+
     FILE * infile;          /* actual FILE */
-    char name[PATH_LIMIT];
-    off_t offset;           /* current offset */
-    size_t validsize;       /* current buffer size */
+    char name[PATH_LIMIT];  /* FILE filename */
+    off_t offset;           /* last read offset (info) */
+    off_t buffer_offset;    /* current buffer data start */
     uint8_t * buffer;       /* data buffer */
     size_t buffersize;      /* max buffer size */
-    size_t filesize;        /* cached file size (max offset) */
+    size_t validsize;       /* current buffer size */
+    size_t filesize;        /* buffered file size */
 } STDIOSTREAMFILE;
 
 static STREAMFILE * open_stdio_streamfile_buffer(const char * const filename, size_t buffersize);
@@ -28,9 +30,9 @@ static size_t read_stdio(STDIOSTREAMFILE *streamfile,uint8_t * dest, off_t offse
         return 0;
 
     /* is the part of the requested length in the buffer? */
-    if (offset >= streamfile->offset && offset < streamfile->offset + streamfile->validsize) {
+    if (offset >= streamfile->buffer_offset && offset < streamfile->buffer_offset + streamfile->validsize) {
         size_t length_to_read;
-        off_t offset_into_buffer = offset - streamfile->offset;
+        off_t offset_into_buffer = offset - streamfile->buffer_offset;
 
         length_to_read = streamfile->validsize - offset_into_buffer;
         if (length_to_read > length)
@@ -43,32 +45,34 @@ static size_t read_stdio(STDIOSTREAMFILE *streamfile,uint8_t * dest, off_t offse
         dest += length_to_read;
     }
 
-    /* What would make more sense here is to read the whole request
-     * at once into the dest buffer, as it must be large enough, and then
-     * copy some part of that into our own buffer.
-     * The destination buffer is supposed to be much smaller than the
-     * STREAMFILE buffer, though. Maybe we should only ever return up
-     * to the buffer size to avoid having to deal with things like this
-     * which are outside of my intended use. */
 
     /* read the rest of the requested length */
     while (length > 0) {
-        size_t length_to_read, length_read;
-        streamfile->validsize = 0; /* buffer is empty now */
+        size_t length_to_read;
 
-        /* request outside file: ignore to avoid seek/read */
-        if (offset > streamfile->filesize) {
-            streamfile->offset = streamfile->filesize;
-            VGM_LOG_ONCE("ERROR: reading over filesize 0x%x @ 0x%lx + 0x%x (buggy meta?)\n", streamfile->filesize, offset, length);
-            return length_read_total; /* partially-read buffer */
+        /* ignore requests at EOF */
+        if (offset >= streamfile->filesize) {
+            //offset = streamfile->filesize; /* seems fseek doesn't clamp offset */
+            VGM_ASSERT_ONCE(offset > streamfile->filesize, "STDIO: reading over filesize 0x%x @ 0x%x + 0x%x\n", streamfile->filesize, (uint32_t)offset, length);
+            break;
         }
 
         /* position to new offset */
         if (fseeko(streamfile->infile,offset,SEEK_SET)) {
-            streamfile->offset = streamfile->filesize;
-            return 0; /* fail miserably (fseek shouldn't fail and reach this) */
+            break; /* this shouldn't happen in our code */
         }
-        streamfile->offset = offset;
+
+#ifdef _MSC_VER
+        /* Workaround a bug that appears when compiling with MSVC (later versions).
+         * This bug is deterministic and seemingly appears randomly after seeking.
+         * It results in fread returning data from the wrong area of the file.
+         * HPS is one format that is almost always affected by this. */
+        fseek(streamfile->infile, ftell(streamfile->infile), SEEK_SET);
+#endif
+
+        /* fill the buffer (offset now is beyond buffer_offset) */
+        streamfile->buffer_offset = offset;
+        streamfile->validsize = fread(streamfile->buffer,sizeof(uint8_t),streamfile->buffersize,streamfile->infile);
 
         /* decide how much must be read this time */
         if (length > streamfile->buffersize)
@@ -76,44 +80,42 @@ static size_t read_stdio(STDIOSTREAMFILE *streamfile,uint8_t * dest, off_t offse
         else
             length_to_read = length;
 
-        /* fill the buffer */
-        length_read = fread(streamfile->buffer,sizeof(uint8_t),streamfile->buffersize,streamfile->infile);
-        streamfile->validsize = length_read;
-
-        /* if we can't get enough to satisfy the request (EOF) we give up */
-        if (length_read < length_to_read) {
-            memcpy(dest,streamfile->buffer,length_read);
-            return length_read_total + length_read; /* partially-read buffer */
+        /* give up on partial reads (EOF) */
+        if (streamfile->validsize < length_to_read) {
+            memcpy(dest,streamfile->buffer,streamfile->validsize);
+            offset += streamfile->validsize;
+            length_read_total += streamfile->validsize;
+            break;
         }
 
         /* use the new buffer */
         memcpy(dest,streamfile->buffer,length_to_read);
+        offset += length_to_read;
         length_read_total += length_to_read;
         length -= length_to_read;
         dest += length_to_read;
-        offset += length_to_read;
     }
 
+    streamfile->offset = offset; /* last fread offset */
     return length_read_total;
+}
+static size_t get_size_stdio(STDIOSTREAMFILE * streamfile) {
+    return streamfile->filesize;
+}
+
+static off_t get_offset_stdio(STDIOSTREAMFILE *streamfile) {
+    return streamfile->offset;
+}
+
+static void get_name_stdio(STDIOSTREAMFILE *streamfile,char *buffer,size_t length) {
+    strncpy(buffer,streamfile->name,length);
+    buffer[length-1]='\0';
 }
 
 static void close_stdio(STDIOSTREAMFILE * streamfile) {
     fclose(streamfile->infile);
     free(streamfile->buffer);
     free(streamfile);
-}
-
-static size_t get_size_stdio(STDIOSTREAMFILE * streamfile) {
-    return streamfile->filesize;
-}
-
-static off_t get_offset_stdio(STDIOSTREAMFILE *streamFile) {
-    return streamFile->offset;
-}
-
-static void get_name_stdio(STDIOSTREAMFILE *streamfile,char *buffer,size_t length) {
-    strncpy(buffer,streamfile->name,length);
-    buffer[length-1]='\0';
 }
 
 static STREAMFILE *open_stdio(STDIOSTREAMFILE *streamFile,const char * const filename,size_t buffersize) {
@@ -170,8 +172,9 @@ static STREAMFILE * open_stdio_streamfile_buffer_by_file(FILE *infile,const char
     fseeko(streamfile->infile,0,SEEK_END);
     streamfile->filesize = ftello(streamfile->infile);
 
-    /* some compilers/flags may use ftell, which only handles up to ~2.14GB
-     * (possible for banks like FSB, though unlikely). */
+    /* Typically fseek(o)/ftell(o) may only handle up to ~2.14GB, signed 32b = 0x7FFFFFFF
+     * (happens in banks like FSB, though rarely). Can be remedied with the
+     * preprocessor (-D_FILE_OFFSET_BITS=64 in GCC) but it's not well tested. */
     if (streamfile->filesize == 0xFFFFFFFF) { /* -1 on error */
         VGM_LOG("STREAMFILE: ftell error\n");
         goto fail; /* can be ignored but may result in strange/unexpected behaviors */
@@ -215,7 +218,8 @@ typedef struct {
     STREAMFILE sf;
 
     STREAMFILE *inner_sf;
-    off_t offset;           /* current buffer data start */
+    off_t offset;           /* last read offset (info) */
+    off_t buffer_offset;    /* current buffer data start */
     uint8_t * buffer;       /* data buffer */
     size_t buffersize;      /* max buffer size */
     size_t validsize;       /* current buffer size */
@@ -230,9 +234,9 @@ static size_t buffer_read(BUFFER_STREAMFILE *streamfile, uint8_t * dest, off_t o
         return 0;
 
     /* is the part of the requested length in the buffer? */
-    if (offset >= streamfile->offset && offset < streamfile->offset + streamfile->validsize) {
+    if (offset >= streamfile->buffer_offset && offset < streamfile->buffer_offset + streamfile->validsize) {
         size_t length_to_read;
-        off_t offset_into_buffer = offset - streamfile->offset;
+        off_t offset_into_buffer = offset - streamfile->buffer_offset;
 
         length_to_read = streamfile->validsize - offset_into_buffer;
         if (length_to_read > length)
@@ -245,27 +249,21 @@ static size_t buffer_read(BUFFER_STREAMFILE *streamfile, uint8_t * dest, off_t o
         dest += length_to_read;
     }
 
-    /* What would make more sense here is to read the whole request
-     * at once into the dest buffer, as it must be large enough, and then
-     * copy some part of that into our own buffer.
-     * The destination buffer is supposed to be much smaller than the
-     * STREAMFILE buffer, though. Maybe we should only ever return up
-     * to the buffer size to avoid having to deal with things like this
-     * which are outside of my intended use. */
 
     /* read the rest of the requested length */
     while (length > 0) {
-        size_t length_to_read, length_read;
-        streamfile->validsize = 0; /* buffer is empty now */
+        size_t length_to_read;
 
-        /* request outside file: ignore to avoid seek/read */
-        if (offset > streamfile->filesize) {
-            streamfile->offset = streamfile->filesize;
-            VGM_LOG_ONCE("ERROR: reading over filesize 0x%x @ 0x%lx + 0x%x (buggy meta?)\n", streamfile->filesize, offset, length);
-            return length_read_total; /* partially-read buffer */
+        /* ignore requests at EOF */
+        if (offset >= streamfile->filesize) {
+            //offset = streamfile->filesize; /* seems fseek doesn't clamp offset */
+            VGM_ASSERT_ONCE(offset > streamfile->filesize, "BUFFER: reading over filesize 0x%x @ 0x%x + 0x%x\n", streamfile->filesize, (uint32_t)offset, length);
+            break;
         }
 
-        streamfile->offset = offset;
+        /* fill the buffer (offset now is beyond buffer_offset) */
+        streamfile->buffer_offset = offset;
+        streamfile->validsize = streamfile->inner_sf->read(streamfile->inner_sf, streamfile->buffer, streamfile->buffer_offset, streamfile->buffersize);
 
         /* decide how much must be read this time */
         if (length > streamfile->buffersize)
@@ -273,31 +271,30 @@ static size_t buffer_read(BUFFER_STREAMFILE *streamfile, uint8_t * dest, off_t o
         else
             length_to_read = length;
 
-        /* fill the buffer */
-        length_read = streamfile->inner_sf->read(streamfile->inner_sf, streamfile->buffer, streamfile->offset, streamfile->buffersize);
-        streamfile->validsize = length_read;
-
-        /* if we can't get enough to satisfy the request (EOF) we give up */
-        if (length_read < length_to_read) {
-            memcpy(dest,streamfile->buffer,length_read);
-            return length_read_total + length_read; /* partially-read buffer */
+        /* give up on partial reads (EOF) */
+        if (streamfile->validsize < length_to_read) {
+            memcpy(dest,streamfile->buffer,streamfile->validsize);
+            offset += streamfile->validsize;
+            length_read_total += streamfile->validsize;
+            break;
         }
 
         /* use the new buffer */
         memcpy(dest,streamfile->buffer,length_to_read);
+        offset += length_to_read;
         length_read_total += length_to_read;
         length -= length_to_read;
         dest += length_to_read;
-        offset += length_to_read;
     }
 
+    streamfile->offset = offset; /* last fread offset */
     return length_read_total;
 }
 static size_t buffer_get_size(BUFFER_STREAMFILE * streamfile) {
     return streamfile->filesize; /* cache */
 }
 static size_t buffer_get_offset(BUFFER_STREAMFILE * streamfile) {
-    return streamfile->offset; /* cache */ //todo internal offset?
+    return streamfile->offset; /* cache */
 }
 static void buffer_get_name(BUFFER_STREAMFILE *streamfile, char *buffer, size_t length) {
     streamfile->inner_sf->get_name(streamfile->inner_sf, buffer, length); /* default */
@@ -806,6 +803,15 @@ STREAMFILE * open_streamfile_by_filename(STREAMFILE *streamFile, const char * na
     return streamFile->open(streamFile,filename,STREAMFILE_DEFAULT_BUFFER_SIZE);
 }
 
+STREAMFILE * reopen_streamfile(STREAMFILE *streamFile, size_t buffer_size) {
+    char pathname[PATH_LIMIT];
+
+    if (buffer_size == 0)
+        buffer_size = STREAMFILE_DEFAULT_BUFFER_SIZE;
+    streamFile->get_name(streamFile,pathname,sizeof(pathname));
+    return streamFile->open(streamFile,pathname,buffer_size);
+}
+
 
 /* Read a line into dst. The source files are lines separated by CRLF (Windows) / LF (Unux) / CR (Mac).
  * The line will be null-terminated and CR/LF removed if found.
@@ -961,6 +967,17 @@ fail:
     return 0;
 }
 
+/* hack to allow relative paths in various OSs */
+void fix_dir_separators(char * filename) {
+    char c;
+    int i = 0;
+    while ((c = filename[i]) != '\0') {
+        if ((c == '\\' && DIR_SEPARATOR == '/') || (c == '/' && DIR_SEPARATOR == '\\'))
+            filename[i] = DIR_SEPARATOR;
+        i++;
+    }
+}
+
 
 /**
  * Checks if the stream filename is one of the extensions (comma-separated, ex. "adx" or "adx,aix").
@@ -1094,4 +1111,34 @@ void get_streamfile_path(STREAMFILE *streamFile, char * buffer, size_t size) {
 void get_streamfile_ext(STREAMFILE *streamFile, char * filename, size_t size) {
     streamFile->get_name(streamFile,filename,size);
     strcpy(filename, filename_extension(filename));
+}
+
+/* debug util, mainly for custom IO testing */
+void dump_streamfile(STREAMFILE *streamFile, const char* out) {
+#ifdef VGM_DEBUG_OUTPUT
+    off_t offset = 0;
+    FILE *f = NULL;
+
+    if (out) {
+        f = fopen(out,"wb");
+        if (!f) return;
+    }
+
+    VGM_LOG("dump streamfile, size: %x\n", get_streamfile_size(streamFile));
+    while (offset < get_streamfile_size(streamFile)) {
+        uint8_t buffer[0x8000];
+        size_t read;
+
+        read = read_streamfile(buffer,offset,0x8000,streamFile);
+        if (out)
+            fwrite(buffer,sizeof(uint8_t),read, f);
+        else
+            VGM_LOGB(buffer,read,0);
+        offset += read;
+    }
+
+    if (out) {
+        fclose(f);
+    }
+#endif
 }

@@ -1,15 +1,19 @@
 #include "coding.h"
-#include "../util.h"
+#include <g719.h>
 #ifdef _MSC_VER
 #include <excpt.h>
 #endif
 
 #ifdef VGM_USE_G719
-#include "../stack_alloc.h"
+#define G719_MAX_CODES ((1280/8)) /* in int16, so max frame size is (value/8)*2 (0xF0=common, 0x140=decoder max 2560b, rare) */
+
 
 g719_codec_data *init_g719(int channel_count, int frame_size) {
     int i;
     g719_codec_data *data = NULL;
+
+    if (frame_size / sizeof(int16_t) > G719_MAX_CODES)
+        goto fail;
 
     data = calloc(channel_count, sizeof(g719_codec_data)); /* one decoder per channel */
     if (!data) goto fail;
@@ -40,51 +44,43 @@ fail:
     return NULL;
 }
 
+
 void decode_g719(VGMSTREAM * vgmstream, sample * outbuf, int channelspacing, int32_t samples_to_do, int channel) {
     VGMSTREAMCHANNEL *ch = &vgmstream->ch[channel];
     g719_codec_data *data = vgmstream->codec_data;
     g719_codec_data *ch_data = &data[channel];
     int i;
 
-    if (0 == vgmstream->samples_into_block)
-    {
-        VARDECL(int16_t,code_buffer);
-        ALLOC(code_buffer, vgmstream->interleave_block_size / 2, int16_t);
-        vgmstream->ch[channel].streamfile->read(ch->streamfile, (uint8_t*)code_buffer, ch->offset, vgmstream->interleave_block_size);
+    if (0 == vgmstream->samples_into_block) {
+        int16_t code_buffer[G719_MAX_CODES];
+
+        read_streamfile((uint8_t*)code_buffer, ch->offset, vgmstream->interleave_block_size, ch->streamfile);
         g719_decode_frame(ch_data->handle, code_buffer, ch_data->buffer);
     }
 
-    for (i = 0; i < samples_to_do; i++)
-    {
+    for (i = 0; i < samples_to_do; i++) {
         outbuf[i*channelspacing] = ch_data->buffer[vgmstream->samples_into_block+i];
     }
 }
 
 
-void reset_g719(VGMSTREAM *vgmstream) {
-    g719_codec_data *data = vgmstream->codec_data;
+void reset_g719(g719_codec_data * data, int channels) {
     int i;
     if (!data) return;
 
-    for (i = 0; i < vgmstream->channels; i++)
-    {
+    for (i = 0; i < channels; i++) {
         g719_reset(data[i].handle);
     }
 }
 
-void free_g719(VGMSTREAM *vgmstream) {
-    g719_codec_data *data = (g719_codec_data *) vgmstream->codec_data;
-
-    if (data)
-    {
+void free_g719(g719_codec_data * data, int channels) {
         int i;
+    if (!data) return;
 
-        for (i = 0; i < vgmstream->channels; i++)
-        {
+    for (i = 0; i < channels; i++) {
             g719_free(data[i].handle);
         }
         free(data);
-    }
 }
 
 #endif

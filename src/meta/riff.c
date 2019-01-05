@@ -13,6 +13,7 @@ static VGMSTREAM *parse_riff_ogg(STREAMFILE * streamFile, off_t start_offset, si
 /* return milliseconds */
 static long parse_adtl_marker(unsigned char * marker) {
     long hh,mm,ss,ms;
+
     if (memcmp("Marker ",marker,7)) return -1;
 
     if (4 != sscanf((char*)marker+7,"%ld:%ld:%ld.%ld",&hh,&mm,&ss,&ms))
@@ -25,31 +26,31 @@ static long parse_adtl_marker(unsigned char * marker) {
 static void parse_adtl(off_t adtl_offset, off_t adtl_length, STREAMFILE  *streamFile, long *loop_start, long *loop_end, int *loop_flag) {
     int loop_start_found = 0;
     int loop_end_found = 0;
-    off_t current_chunk = adtl_offset+4;
+    off_t current_chunk = adtl_offset+0x04;
 
-    while (current_chunk < adtl_offset+adtl_length) {
-        uint32_t chunk_type = read_32bitBE(current_chunk,streamFile);
-        off_t chunk_size = read_32bitLE(current_chunk+4,streamFile);
+    while (current_chunk < adtl_offset + adtl_length) {
+        uint32_t chunk_type = read_32bitBE(current_chunk+0x00,streamFile);
+        off_t chunk_size    = read_32bitLE(current_chunk+0x04,streamFile);
 
-        if (current_chunk+8+chunk_size > adtl_offset+adtl_length) return;
+        if (current_chunk+0x08+chunk_size > adtl_offset+adtl_length)
+            return;
 
         switch(chunk_type) {
-            case 0x6c61626c: {  /* labl */
-                unsigned char *labelcontent;
-                labelcontent = malloc(chunk_size-4);
+            case 0x6c61626c: { /* "labl" */
+                unsigned char *labelcontent = malloc(chunk_size-0x04);
                 if (!labelcontent) return;
-                if (read_streamfile(labelcontent,current_chunk+0xc, chunk_size-4,streamFile)!=chunk_size-4) {
+                if (read_streamfile(labelcontent,current_chunk+0x0c, chunk_size-0x04,streamFile) != chunk_size-0x04) {
                     free(labelcontent);
                     return;
                 }
 
                 switch (read_32bitLE(current_chunk+8,streamFile)) {
                     case 1:
-                        if (!loop_start_found && (*loop_start = parse_adtl_marker(labelcontent))>=0)
+                        if (!loop_start_found && (*loop_start = parse_adtl_marker(labelcontent)) >= 0)
                             loop_start_found = 1;
                         break;
                     case 2:
-                        if (!loop_end_found && (*loop_end = parse_adtl_marker(labelcontent))>=0)
+                        if (!loop_end_found && (*loop_end = parse_adtl_marker(labelcontent)) >= 0)
                             loop_end_found = 1;
                         break;
                     default:
@@ -95,15 +96,14 @@ static int read_fmt(int big_endian, STREAMFILE * streamFile, off_t current_chunk
     int16_t (*read_16bit)(off_t,STREAMFILE*) = big_endian ? read_16bitBE : read_16bitLE;
 
     fmt->offset = current_chunk;
-    fmt->size = read_32bit(current_chunk+0x4,streamFile);
+    fmt->size = read_32bit(current_chunk+0x04,streamFile);
 
+    fmt->codec = (uint16_t)read_16bit(current_chunk+0x08,streamFile);
     fmt->sample_rate = read_32bit(current_chunk+0x0c,streamFile);
     fmt->channel_count = read_16bit(current_chunk+0x0a,streamFile);
     fmt->block_size = read_16bit(current_chunk+0x14,streamFile);
-    fmt->interleave = 0;
-
     fmt->bps = read_16bit(current_chunk+0x16,streamFile);
-    fmt->codec = (uint16_t)read_16bit(current_chunk+0x8,streamFile);
+    fmt->interleave = 0;
 
     switch (fmt->codec) {
         case 0x00:  /* Yamaha ADPCM (raw) [Headhunter (DC), Bomber hehhe (DC)] (unofficial) */
@@ -129,8 +129,15 @@ static int read_fmt(int big_endian, STREAMFILE * streamFile, off_t current_chunk
             break;
 
         case 0x02: /* MS ADPCM */
-            if (fmt->bps != 4) goto fail;
-            fmt->coding_type = coding_MSADPCM;
+            if (fmt->bps == 4) {
+                fmt->coding_type = coding_MSADPCM;
+            }
+            else if (fmt->bps == 16 && fmt->block_size == 0x02 * fmt->channel_count && fmt->size == 0x14) {
+                fmt->coding_type = coding_IMA; /* MX vs ATV Unleashed (PC) codec hijack */
+            }
+            else {
+                goto fail;
+            }
             break;
 
         case 0x11:  /* MS IMA ADPCM [Layton Brothers: Mystery Room (iOS/Android)] */
@@ -243,6 +250,7 @@ VGMSTREAM * init_vgmstream_riff(STREAMFILE *streamFile) {
     long loop_start_ms = -1, loop_end_ms = -1;
     int32_t loop_start_wsmp = -1, loop_end_wsmp = -1;
     int32_t loop_start_smpl = -1, loop_end_smpl = -1;
+    int32_t loop_start_cue = -1;
 
     int FormatChunkFound = 0, DataChunkFound = 0, JunkFound = 0;
 
@@ -254,19 +262,29 @@ VGMSTREAM * init_vgmstream_riff(STREAMFILE *streamFile) {
 
 
     /* check extension */
-    /* .lwav: to avoid hijacking .wav, .xwav: fake for Xbox games (unneded anymore) */
-    /* .da: The Great Battle VI (PS), .cd: Exector (PS), .med: Psi Ops (PC), .snd: Layton Brothers (iOS/Android),
+    /* .lwav: to avoid hijacking .wav
+     * .xwav: fake for Xbox games (not needed anymore)
+     * .da: The Great Battle VI (PS1)
+     * .dax: Love Game's - Wai Wai Tennis (PS1)
+     * .cd: Exector (PS)
+     * .med: Psi Ops (PC)
+     * .snd: Layton Brothers (iOS/Android)
      * .adx: Remember11 (PC) sfx
      * .adp: Headhunter (DC)
      * .xss: Spider-Man The Movie (Xbox)
-     * .xsew: Mega Man X Legacy Collections (PC) */
-    if ( check_extensions(streamFile, "wav,lwav,xwav,da,cd,med,snd,adx,adp,xss,xsew") ) {
+     * .xsew: Mega Man X Legacy Collections (PC)
+     * .adpcm: Angry Birds Transformers (Android)
+     * .adw: Dead Rising 2 (PC)
+     * .wd: Genma Onimusha (Xbox) voices */
+    if ( check_extensions(streamFile, "wav,lwav,xwav,da,dax,cd,med,snd,adx,adp,xss,xsew,adpcm,adw,wd") ) {
         ;
     }
     else if ( check_extensions(streamFile, "mwv") ) {
         mwv = 1;
     }
-    /* .rws: Climax games (Silent Hill Origins PSP, Oblivion PSP), .aud: EA Replay */
+    /* .at3: standard
+     * .rws: Climax games (Silent Hill Origins PSP, Oblivion PSP)
+     * .aud: EA Replay */
     else if ( check_extensions(streamFile, "at3,rws,aud") ) {
         at3 = 1;
     }
@@ -286,20 +304,22 @@ VGMSTREAM * init_vgmstream_riff(STREAMFILE *streamFile) {
     riff_size = read_32bitLE(0x04,streamFile);
     file_size = get_streamfile_size(streamFile);
 
-    /* for some of Liar-soft's buggy RIFF+Ogg made with Soundforge [Shikkoku no Sharnoth (PC)] */
+    /* some of Liar-soft's buggy RIFF+Ogg made with Soundforge [Shikkoku no Sharnoth (PC)] */
     if (riff_size+0x08+0x01 == file_size)
         riff_size += 0x01;
-
     /* some Xbox games do this [Dynasty Warriors 3 (Xbox), BloodRayne (Xbox)] */
     if (riff_size == file_size && read_16bitLE(0x14,streamFile)==0x0069)
         riff_size -= 0x08;
     /* some Dreamcast/Naomi games do this [Headhunter (DC), Bomber hehhe (DC)] */
     if (riff_size + 0x04 == file_size && read_16bitLE(0x14,streamFile)==0x0000)
         riff_size -= 0x04;
-
+    /* some PC games do this [Halo 2 (PC)] (possibly bad extractor? 'Gravemind Tool') */
+    if (riff_size + 0x04 == file_size && read_16bitLE(0x14,streamFile)==0x0069)
+        riff_size -= 0x04;
 
     /* check for truncated RIFF */
-    if (file_size < riff_size+0x08) goto fail;
+    if (file_size < riff_size+0x08)
+        goto fail;
 
     /* read through chunks to verify format and find metadata */
     {
@@ -354,16 +374,16 @@ VGMSTREAM * init_vgmstream_riff(STREAMFILE *streamFile) {
                     break;
 
                 case 0x736D706C:    /* "smpl" (RIFFMIDISample + MIDILoop chunk) */
-                    /* check loop count/loop info (most common) *///todo double check values
+                    /* check loop count/loop info (most common) */
                     /* 0x00: manufacturer id, 0x04: product id, 0x08: sample period, 0x0c: unity node,
                      * 0x10: pitch fraction, 0x14: SMPTE format, 0x18: SMPTE offset, 0x1c: loop count, 0x20: sampler data */
-                    if (read_32bitLE(current_chunk+0x08+0x1c, streamFile)==1) {
+                    if (read_32bitLE(current_chunk+0x08+0x1c, streamFile) == 1) { /* handle only one loop (could contain N MIDILoop) */
                         /* 0x24: cue point id, 0x28: type (0=forward, 1=alternating, 2=backward)
                          * 0x2c: start, 0x30: end, 0x34: fraction, 0x38: play count */
-                        if (read_32bitLE(current_chunk+0x08+0x28, streamFile)==0) {
+                        if (read_32bitLE(current_chunk+0x08+0x28, streamFile) == 0) { /* loop forward */
                             loop_flag = 1;
                             loop_start_smpl = read_32bitLE(current_chunk+0x08+0x2c, streamFile);
-                            loop_end_smpl   = read_32bitLE(current_chunk+0x08+0x30, streamFile);
+                            loop_end_smpl   = read_32bitLE(current_chunk+0x08+0x30, streamFile) + 1; /* must add 1 as per spec (ok for standard WAV/AT3/AT9) */
                         }
                     }
                     break;
@@ -376,10 +396,10 @@ VGMSTREAM * init_vgmstream_riff(STREAMFILE *streamFile) {
                             && read_32bitLE(current_chunk+0x08+0x10, streamFile) > 0
                             && read_32bitLE(current_chunk+0x08+0x14, streamFile) == 0x10) {
                         /* 0x14: size, 0x18: loop type (0=forward, 1=release), 0x1c: loop start, 0x20: loop length */
-                        if (read_32bitLE(current_chunk+0x08+0x18, streamFile)==0) {
+                        if (read_32bitLE(current_chunk+0x08+0x18, streamFile) == 0) { /* loop forward */
                             loop_flag = 1;
                             loop_start_wsmp = read_32bitLE(current_chunk+0x08+0x1c, streamFile);
-                            loop_end_wsmp   = read_32bitLE(current_chunk+0x08+0x20, streamFile);
+                            loop_end_wsmp   = read_32bitLE(current_chunk+0x08+0x20, streamFile); /* must not add 1 as per spec */
                             loop_end_wsmp  += loop_start_wsmp;
                         }
                     }
@@ -407,6 +427,18 @@ VGMSTREAM * init_vgmstream_riff(STREAMFILE *streamFile) {
                     if (!mwv) break;
                     loop_flag = read_32bitLE(current_chunk+0x08, streamFile);
                     mwv_ctrl_offset = current_chunk;
+                    break;
+
+                case 0x63756520:    /* "cue " (used in Source Engine for storing loop points) */
+                    if (fmt.coding_type == coding_PCM16LE || fmt.coding_type == coding_MSADPCM) {
+                        uint32_t num_cues = read_32bitLE(current_chunk + 0x08, streamFile);
+
+                        if (num_cues == 1 || num_cues == 2) {
+                            // The second cue sets loop end point but it's not actually used by the engine.
+                            loop_flag = 1;
+                            loop_start_cue = read_32bitLE(current_chunk + 0x20, streamFile);
+                        }
+                    }
                     break;
 
                 case 0x4A554E4B:    /* "JUNK" */
@@ -516,6 +548,10 @@ VGMSTREAM * init_vgmstream_riff(STREAMFILE *streamFile) {
                 vgmstream->num_samples = fact_sample_count; /* some (converted?) Xbox games have bigger fact_samples */
             break;
 
+        case coding_IMA:
+            vgmstream->num_samples = ima_bytes_to_samples(data_size, fmt.channel_count);
+            break;
+
 #ifdef VGM_USE_FFMPEG
         case coding_FFmpeg: {
             ffmpeg_codec_data *ffmpeg_data = init_ffmpeg_offset(streamFile, 0x00, streamFile->get_size(streamFile));
@@ -583,6 +619,7 @@ VGMSTREAM * init_vgmstream_riff(STREAMFILE *streamFile) {
         case coding_MS_IMA:
         case coding_AICA:
         case coding_XBOX_IMA:
+        case coding_IMA:
 #ifdef VGM_USE_FFMPEG
         case coding_FFmpeg:
 #endif
@@ -601,6 +638,15 @@ VGMSTREAM * init_vgmstream_riff(STREAMFILE *streamFile) {
             break;
     }
 
+    /* Dynasty Warriors 5 (Xbox) 6ch interleaves stereo frames, probably not official */
+    if (vgmstream->coding_type == coding_XBOX_IMA && vgmstream->channels > 2) {
+        vgmstream->layout_type = layout_interleave;
+        vgmstream->interleave_block_size = 0x24; /* block_size / channels */
+        if (vgmstream->channels > 2 && vgmstream->channels % 2 != 0)
+            goto fail; /* only 2ch+..+2ch layout is known */
+    }
+
+
     /* meta, loops */
     vgmstream->meta_type = meta_RIFF_WAVE;
     if (loop_flag) {
@@ -612,6 +658,10 @@ VGMSTREAM * init_vgmstream_riff(STREAMFILE *streamFile) {
         else if (loop_start_smpl >= 0) {
             vgmstream->loop_start_sample = loop_start_smpl;
             vgmstream->loop_end_sample = loop_end_smpl;
+            /* end must add +1, but check in case of faulty tools */
+            if (vgmstream->loop_end_sample - 1 == vgmstream->num_samples)
+                vgmstream->loop_end_sample--;
+
             vgmstream->meta_type = meta_RIFF_WAVE_smpl;
         }
         else if (loop_start_wsmp >= 0) {
@@ -621,6 +671,10 @@ VGMSTREAM * init_vgmstream_riff(STREAMFILE *streamFile) {
         }
         else if (mwv && mwv_ctrl_offset != -1) {
             vgmstream->loop_start_sample = read_32bitLE(mwv_ctrl_offset+12, streamFile);
+            vgmstream->loop_end_sample = vgmstream->num_samples;
+        }
+        else if (loop_start_cue != -1) {
+            vgmstream->loop_start_sample = loop_start_cue;
             vgmstream->loop_end_sample = vgmstream->num_samples;
         }
     }
@@ -707,7 +761,7 @@ VGMSTREAM * init_vgmstream_rifx(STREAMFILE *streamFile) {
                         if (read_32bitBE(current_chunk+0x2c+4, streamFile)==0) {
                             loop_flag = 1;
                             loop_start_offset = read_32bitBE(current_chunk+0x2c+8, streamFile);
-                            loop_end_offset = read_32bitBE(current_chunk+0x2c+0xc,streamFile);
+                            loop_end_offset = read_32bitBE(current_chunk+0x2c+0xc,streamFile) + 1;
                         }
                     }
                     break;
@@ -756,6 +810,10 @@ VGMSTREAM * init_vgmstream_rifx(STREAMFILE *streamFile) {
         if (loop_start_offset >= 0) {
             vgmstream->loop_start_sample = loop_start_offset;
             vgmstream->loop_end_sample = loop_end_offset;
+            /* end must add +1, but check in case of faulty tools */
+            if (vgmstream->loop_end_sample - 1 == vgmstream->num_samples)
+                vgmstream->loop_end_sample--;
+            
             vgmstream->meta_type = meta_RIFX_WAVE_smpl;
         }
     }

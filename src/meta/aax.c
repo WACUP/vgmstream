@@ -3,8 +3,6 @@
 #include "../coding/coding.h"
 #include "aax_utf.h"
 
-static STREAMFILE* setup_aax_streamfile(STREAMFILE *streamFile, off_t subfile_offset, size_t subfile_size, const char* fake_ext);
-
 
 #define MAX_SEGMENTS 2 /* usually segment0=intro, segment1=loop/main */
 
@@ -15,7 +13,7 @@ VGMSTREAM * init_vgmstream_aax(STREAMFILE *streamFile) {
 
     int loop_flag = 0, channel_count = 0;
     int32_t sample_count, loop_start_sample = 0, loop_end_sample = 0;
-    int segment_count, loop_segment = 0;
+    int segment_count;
 
     segmented_layout_data *data = NULL;
     int table_error = 0;
@@ -77,7 +75,7 @@ VGMSTREAM * init_vgmstream_aax(STREAMFILE *streamFile) {
 
     /* open each segment subfile */
     for (i = 0; i < segment_count; i++) {
-        STREAMFILE* temp_streamFile = setup_aax_streamfile(streamFile, segment_offset[i],segment_size[i], (is_hca ? "hca" : "adx"));
+        STREAMFILE* temp_streamFile = setup_subfile_streamfile(streamFile, segment_offset[i],segment_size[i], (is_hca ? "hca" : "adx"));
         if (!temp_streamFile) goto fail;
 
         data->segments[i] = is_hca ?
@@ -102,7 +100,6 @@ VGMSTREAM * init_vgmstream_aax(STREAMFILE *streamFile) {
 
         if (!loop_flag && segment_loop_flag) {
             loop_start_sample = sample_count;
-            loop_segment = i;
         }
 
         sample_count += data->segments[i]->num_samples;
@@ -130,36 +127,12 @@ VGMSTREAM * init_vgmstream_aax(STREAMFILE *streamFile) {
     vgmstream->layout_type = layout_segmented;
 
     vgmstream->layout_data = data;
-    data->loop_segment = loop_segment;
 
     return vgmstream;
 
 fail:
     close_vgmstream(vgmstream);
     free_layout_segmented(data);
-    return NULL;
-}
-
-static STREAMFILE* setup_aax_streamfile(STREAMFILE *streamFile, off_t subfile_offset, size_t subfile_size, const char* fake_ext) {
-    STREAMFILE *temp_streamFile = NULL, *new_streamFile = NULL;
-
-    /* setup subfile */
-    new_streamFile = open_wrap_streamfile(streamFile);
-    if (!new_streamFile) goto fail;
-    temp_streamFile = new_streamFile;
-
-    new_streamFile = open_clamp_streamfile(temp_streamFile, subfile_offset,subfile_size);
-    if (!new_streamFile) goto fail;
-    temp_streamFile = new_streamFile;
-
-    new_streamFile = open_fakename_streamfile(temp_streamFile, NULL,fake_ext);
-    if (!new_streamFile) goto fail;
-    temp_streamFile = new_streamFile;
-
-    return temp_streamFile;
-
-fail:
-    close_streamfile(temp_streamFile);
     return NULL;
 }
 
