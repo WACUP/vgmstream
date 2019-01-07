@@ -308,7 +308,7 @@ ffmpeg_codec_data * init_ffmpeg_header_offset(STREAMFILE *streamFile, uint8_t * 
  */
 ffmpeg_codec_data * init_ffmpeg_header_offset_subsong(STREAMFILE *streamFile, uint8_t * header, uint64_t header_size, uint64_t start, uint64_t size, int target_subsong) {
     char filename[PATH_LIMIT];
-    ffmpeg_codec_data * data;
+    ffmpeg_codec_data * data = NULL;
     int errcode, i;
     int streamIndex, streamCount;
 
@@ -514,6 +514,7 @@ ffmpeg_codec_data * init_ffmpeg_header_offset_subsong(STREAMFILE *streamFile, ui
 #ifdef _MSC_VER
 	}
 	__except (EXCEPTION_EXECUTE_HANDLER) {
+		g_ffmpeg_initialized = 0;
 	}
 #endif
 
