@@ -1554,7 +1554,11 @@ FARPROC WINAPI FailHook(unsigned dliNotify, PDelayLoadInfo pdli) {
 			GetModuleFileName(NULL, filepath, MAX_PATH);
 			PathRemoveFileSpec(filepath);
 			PathAppend(filepath, filename);
-			module = LoadLibrary(filepath);
+			// because the ffmpeg dlls have a dependency
+			// on themselves, this change maintains the
+			// safe search loading whilst just for this
+			// attempt it resolves with our custom path
+			module = LoadLibraryEx(filepath, NULL, LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR);
 		}
 		free(filename);
 		return (FARPROC)module;
