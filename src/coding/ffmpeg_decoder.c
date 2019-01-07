@@ -1,4 +1,7 @@
 #include "coding.h"
+#ifdef _MSC_VER
+#include <windows.h>
+#endif
 
 #ifdef VGM_USE_FFMPEG
 
@@ -269,11 +272,29 @@ static int64_t ffmpeg_seek(void *opaque, int64_t offset, int whence) {
 /* ******************************************** */
 
 ffmpeg_codec_data * init_ffmpeg_offset(STREAMFILE *streamFile, uint64_t start, uint64_t size) {
+#ifdef _MSC_VER
+	__try {
+#endif
     return init_ffmpeg_header_offset(streamFile, NULL,0, start,size);
+#ifdef _MSC_VER
+	}
+	__except (EXCEPTION_EXECUTE_HANDLER) {
+		return NULL;
+	}
+#endif
 }
 
 ffmpeg_codec_data * init_ffmpeg_header_offset(STREAMFILE *streamFile, uint8_t * header, uint64_t header_size, uint64_t start, uint64_t size) {
+#ifdef _MSC_VER
+	__try {
+#endif
     return init_ffmpeg_header_offset_subsong(streamFile, header, header_size, start, size, 0);
+#ifdef _MSC_VER
+	}
+	__except (EXCEPTION_EXECUTE_HANDLER) {
+		return NULL;
+	}
+#endif
 }
 
 /**
@@ -295,6 +316,9 @@ ffmpeg_codec_data * init_ffmpeg_header_offset_subsong(STREAMFILE *streamFile, ui
     AVCodecParameters *codecPar = NULL;
     AVRational tb;
 
+#ifdef _MSC_VER
+		__try {
+#endif
 
     /* basic setup */
     g_init_ffmpeg();
@@ -487,6 +511,11 @@ ffmpeg_codec_data * init_ffmpeg_header_offset_subsong(STREAMFILE *streamFile, ui
         data->skipSamples = stream->skip_samples;
 
     return data;
+#ifdef _MSC_VER
+	}
+	__except (EXCEPTION_EXECUTE_HANDLER) {
+	}
+#endif
 
 fail:
     free_ffmpeg(data);

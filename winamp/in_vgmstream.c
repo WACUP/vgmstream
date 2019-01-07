@@ -31,6 +31,7 @@
 #include <sdk/winamp/in2.h>
 #include <sdk/winamp/wa_ipc.h>
 #include <sdk/winamp/ipc_pe.h>
+#include <sdk/nu/AutoWide.h>
 #include <sdk/nu/AutoChar.h>
 #include <sdk/nu/AutoCharFn.h>
 #include <sdk/nu/ServiceBuilder.h>
@@ -60,7 +61,7 @@ extern api_config *configApi;
 #define VERSIONW L"2.0"
 #endif
 
-#define LIBVGMSTREAM_BUILD "1050-1102-g9346ae5-wacup"
+#define LIBVGMSTREAM_BUILD "1050-1102-g0638ba6-wacup"
 #define APP_NAME "vgmstream plugin"
 #define PLUGIN_DESCRIPTION "vgmstream Decoder v" VERSION
 #define PLUGIN_DESCRIPTIONW L"vgmstream Decoder v" VERSIONW
@@ -959,11 +960,7 @@ int infoDlg(const in_char *fn, HWND hwnd) {
     }
 
     {
-        TCHAR buf[1024] = {0};
-        size_t buf_size = 1024;
-
-        cfg_char_to_wchar(buf, buf_size, description);
-        MessageBox(hwnd, buf, TEXT("Stream info"), MB_OK);
+        MessageBox(hwnd, AutoWide(description, CP_UTF8), TEXT("Stream info"), MB_OK);
     }
 #endif
     return 0;
@@ -1195,69 +1192,8 @@ In_Module plugin = {
     0 /* outMod */
 };
 
-__declspec(dllexport) In_Module * winampGetInModule2() {
+extern "C" __declspec(dllexport) In_Module * winampGetInModule2() {
     return &plugin;
-}
-
-char *AutoChar(const wchar_t *convert/*, UINT codePage = CP_ACP, UINT flags = 0*/)
-{
-	const int size = (convert ? WideCharToMultiByte(CP_ACP, 0, convert, (int)-1, 0, 0, NULL, NULL) : 0);
-	//const int size = AutoCharSize(convert, (size_t)-1, CP_ACP, flags);
-
-	if (!size)
-	{
-		return 0;
-	}
-	else
-	{
-		char *narrow = (char *)calloc(size, sizeof(char));
-		if (narrow)
-		{
-			if (!WideCharToMultiByte(CP_ACP, 0, convert, -1, narrow, size, NULL, NULL))
-			{
-				free(narrow);
-				narrow = 0;
-			}
-			else
-			{
-				narrow[size - 1] = 0;
-			}
-		}
-		return narrow;
-	}
-}
-
-wchar_t *AutoWide(const char *convert)
-{
-	if (!convert)
-	{
-		return 0;
-	}
-	else
-	{
-		const int size = MultiByteToWideChar(CP_ACP, 0, convert, -1, 0, 0);
-		if (!size)
-		{
-			return 0;
-		}
-		else
-		{
-			wchar_t *wide = (wchar_t *)calloc(size, sizeof(wchar_t));
-			if (wide)
-			{
-				if (!MultiByteToWideChar(CP_ACP, 0, convert, -1, wide,size))
-				{
-					free(wide);
-					wide = 0;
-				}
-				else
-				{
-					wide[size - 1] = 0;
-				}
-			}
-			return wide;
-		}
-	}
 }
 
 // return 1 if you want winamp to show it's own file info dialogue, 0 if you want to show your own (via In_Module.InfoBox)
@@ -1452,7 +1388,7 @@ extern "C" __declspec (dllexport) int winampGetExtendedFileInfoW(wchar_t *filena
 
 			++p;
 
-			char *extension = AutoChar(p);
+			char *extension = AutoCharDup(p);
 			for (size_t i = 0; i < ext_list_len; i++)
 			{
 				if (!_stricmp(extension, ext_list[i]))
@@ -1462,6 +1398,7 @@ extern "C" __declspec (dllexport) int winampGetExtendedFileInfoW(wchar_t *filena
 					break;
 				}
 			}
+			free(extension);
 			return 1;
 		}
 		return 0;
@@ -1481,7 +1418,7 @@ extern "C" __declspec (dllexport) int winampGetExtendedFileInfoW(wchar_t *filena
 
 	if ( !_stricmp(metadata, "formatinformation"))
 	{
-		char *fn = AutoChar(filename);
+		char *fn = AutoCharDup(filename);
 		if (fn)
 		{
 			VGMSTREAM * infostream = init_vgmstream(fn);
@@ -1510,7 +1447,7 @@ extern "C" __declspec (dllexport) int winampGetExtendedFileInfoW(wchar_t *filena
 	{
 		if (!_stricmp (metadata, "length"))
 		{
-			char *fn = AutoChar(filename);
+			char *fn = AutoCharDup(filename);
 			if (fn)
 			{
 				VGMSTREAM * infostream = init_vgmstream(fn);
@@ -1589,19 +1526,24 @@ extern "C" __declspec(dllexport) int winampUninstallPlugin(HINSTANCE hDllInst, H
 FARPROC WINAPI FailHook(unsigned dliNotify, PDelayLoadInfo pdli) {
 	if (dliNotify == dliFailLoadLib) {
 		HMODULE module = NULL;
-		wchar_t *filename = AutoWide(pdli != NULL ? pdli->szDll : ""),
+		wchar_t *filename = AutoWideDup(pdli != NULL ? pdli->szDll : ""),
 				 filepath[MAX_PATH] = {0};
 
 		if (!plugindir[0]) {
-			PathCombine(plugindir, GetPaths()->winamp_plugin_dir, L"vgmstream_dlls");
+			PathCombine(plugindir, GetPaths()->winamp_plugin_dir, L"vgmstream_dlls\\");
 		}
 
 		// we look for the plug-in in the vgmstream_dlls
 		// folder and if not there or there is a loading
 		// issue then we instead look in the Winamp root
 		PathCombine(filepath, plugindir, filename);
+
 		if (PathFileExists(filepath)) {
-			module = LoadLibrary(filepath);
+			// because the ffmpeg dlls have a dependency
+			// on themselves, this change maintains the
+			// safe search loading whilst just for this
+			// attempt it resolves with our custom path
+			module = LoadLibraryEx(filepath, NULL, LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR);
 			if (module == NULL) {
 				GetModuleFileName(NULL, filepath, MAX_PATH);
 				PathRemoveFileSpec(filepath);

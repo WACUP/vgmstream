@@ -1,6 +1,9 @@
 #include "coding.h"
 #include "../streamfile.h"
 #include <string.h>
+#ifdef _MSC_VER
+#include <windows.h>
+#endif
 
 /**
  * Transmogrifies custom Opus (no Ogg layer and custom packet headers) into is Xiph Opus, creating
@@ -639,16 +642,55 @@ fail:
 }
 
 ffmpeg_codec_data * init_ffmpeg_switch_opus(STREAMFILE *streamFile, off_t start_offset, size_t data_size, int channels, int skip, int sample_rate) {
+#ifdef _MSC_VER
+	__try {
+#endif
     return init_ffmpeg_custom_opus(streamFile, start_offset, data_size, channels, skip, sample_rate, OPUS_SWITCH);
+#ifdef _MSC_VER
 }
+	__except (EXCEPTION_EXECUTE_HANDLER) {
+		return NULL;
+	}
+#endif
+}
+
 ffmpeg_codec_data * init_ffmpeg_ue4_opus(STREAMFILE *streamFile, off_t start_offset, size_t data_size, int channels, int skip, int sample_rate) {
+#ifdef _MSC_VER
+	__try {
+#endif
     return init_ffmpeg_custom_opus(streamFile, start_offset, data_size, channels, skip, sample_rate, OPUS_UE4);
+#ifdef _MSC_VER
+	}
+	__except (EXCEPTION_EXECUTE_HANDLER) {
+		return NULL;
+	}
+#endif
 }
+
 ffmpeg_codec_data * init_ffmpeg_ea_opus(STREAMFILE *streamFile, off_t start_offset, size_t data_size, int channels, int skip, int sample_rate) {
+#ifdef _MSC_VER
+	__try {
+#endif
     return init_ffmpeg_custom_opus(streamFile, start_offset, data_size, channels, skip, sample_rate, OPUS_EA);
+#ifdef _MSC_VER
 }
+	__except (EXCEPTION_EXECUTE_HANDLER) {
+		return NULL;
+	}
+#endif
+}
+
 ffmpeg_codec_data * init_ffmpeg_x_opus(STREAMFILE *streamFile, off_t start_offset, size_t data_size, int channels, int skip, int sample_rate) {
+#ifdef _MSC_VER
+	__try {
+#endif
     return init_ffmpeg_custom_opus(streamFile, start_offset, data_size, channels, skip, sample_rate, OPUS_X);
+#ifdef _MSC_VER
+	}
+	__except (EXCEPTION_EXECUTE_HANDLER) {
+		return NULL;
+	}
+#endif
 }
 
 #endif

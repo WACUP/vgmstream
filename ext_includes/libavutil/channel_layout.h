@@ -22,15 +22,7 @@
 #ifndef AVUTIL_CHANNEL_LAYOUT_H
 #define AVUTIL_CHANNEL_LAYOUT_H
 
-#ifdef _MSC_VER
-#if (_MSC_VER >= 1600)
 #include <stdint.h>
-#else
-#include <pstdint.h>
-#endif
-#else
-#include <stdint.h>
-#endif
 
 /**
  * @file

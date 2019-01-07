@@ -21,15 +21,7 @@
 #ifndef AVUTIL_INTFLOAT_H
 #define AVUTIL_INTFLOAT_H
 
-#ifdef _MSC_VER
-#if (_MSC_VER >= 1600)
 #include <stdint.h>
-#else
-#include <pstdint.h>
-#endif
-#else
-#include <stdint.h>
-#endif
 #include "attributes.h"
 
 union av_intfloat32 {

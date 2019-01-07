@@ -28,15 +28,7 @@
 #define AVUTIL_MEM_H
 
 #include <limits.h>
-#ifdef _MSC_VER
-#if (_MSC_VER >= 1600)
 #include <stdint.h>
-#else
-#include <pstdint.h>
-#endif
-#else
-#include <stdint.h>
-#endif
 
 #include "attributes.h"
 #include "error.h"

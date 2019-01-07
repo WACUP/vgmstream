@@ -1,6 +1,9 @@
 #include "meta.h"
 #include "../coding/coding.h"
 #include "../util.h"
+#ifdef _MSC_VER
+#include <windows.h>
+#endif
 
 static int bink_get_info(STREAMFILE *streamFile, int target_subsong, int * out_total_streams, size_t *out_stream_size, int * out_channel_count, int * out_sample_rate, int * out_num_samples);
 
@@ -39,8 +42,16 @@ VGMSTREAM * init_vgmstream_bik(STREAMFILE *streamFile) {
 #ifdef VGM_USE_FFMPEG
     {
         /* target_subsong should be passed manually */
-
+#ifdef _MSC_VER
+		__try {
+#endif
         vgmstream->codec_data = init_ffmpeg_header_offset_subsong(streamFile, NULL,0, 0x0,get_streamfile_size(streamFile), target_subsong);
+#ifdef _MSC_VER
+		}
+		__except (EXCEPTION_EXECUTE_HANDLER) {
+			vgmstream->codec_data = NULL;
+		}
+#endif
         if (!vgmstream->codec_data) goto fail;
         vgmstream->coding_type = coding_FFmpeg;
     }

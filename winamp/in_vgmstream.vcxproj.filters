@@ -13,6 +13,9 @@
       <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
       <Extensions>cpp;c;cc;cxx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
     </Filter>
+    <Filter Include="External Libraries">
+      <UniqueIdentifier>{535e575b-3146-4f74-8aec-3c5f312d25ce}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="resource.h">
@@ -28,5 +31,13 @@
     <ClCompile Include="in_vgmstream.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\src\plugins.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <Library Include="..\..\loader\hook\Release\winamp.lib">
+      <Filter>External Libraries</Filter>
+    </Library>
   </ItemGroup>
 </Project>
