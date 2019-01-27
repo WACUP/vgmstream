@@ -1,6 +1,6 @@
 # vgmstream
 
-[![AppVeyor build status](https://ci.appveyor.com/api/projects/status/github/kode54/vgmstream?branch=master&svg=true "Build Status")](https://ci.appveyor.com/project/kode54/vgmstream/branch/master/artifacts)
+[![AppVeyor build status](https://ci.appveyor.com/api/projects/status/github/losnoco/vgmstream?branch=master&svg=true "Build Status")](https://ci.appveyor.com/project/kode54/vgmstream/branch/master/artifacts)
 
 
 This is vgmstream, a library for playing streamed (pre-recorded) audio
@@ -16,14 +16,14 @@ There are multiple end-user bits:
 
 Help and newest builds can be found here: https://www.hcs64.com/
 
-Latest development is usually here: https://github.com/kode54/vgmstream/
+Latest development is usually here: https://github.com/losnoco/vgmstream/
 
 ## Needed extra files (for Windows)
 Support for some codecs (Ogg Vorbis, MPEG audio, etc) is done with external
 libraries, so you will need to have certain DLL files.
 
 In the case of the foobar2000 component they are all bundled for convenience,
-or you can get them here: https://github.com/kode54/vgmstream/tree/master/ext_libs
+or you can get them here: https://github.com/losnoco/vgmstream/tree/master/ext_libs
 (bundled here: https://f.losno.co/vgmstream-win32-deps.zip, may not be latest).
 
 Put the following files somewhere Windows can find them:
@@ -132,7 +132,7 @@ them playable through vgmstream.
 - .aac to .laac (tri-Ace games)
 - .ac3 to .lac3 (standard AC3)
 - .aif to .aiffl or .aifcl (standard Mac AIF)
-- .asf to .sng (EA games)
+- .asf to .lasf (EA games, Argonaut ASF)
 - .flac to .lflac (standard FLAC)
 - .mp2 to .lmp2 (standard MP2)
 - .mp3 to .lmp3 (standard MP3)
