@@ -58,10 +58,10 @@ extern api_config *configApi;
 #endif
 
 #ifndef VERSIONW
-#define VERSIONW L"2.0"
+#define VERSIONW L"2.1"
 #endif
 
-#define LIBVGMSTREAM_BUILD "1050-2037-ged397bbc-wacup"
+#define LIBVGMSTREAM_BUILD "1050-2037-g3f687f4f-wacup"
 #define APP_NAME "vgmstream plugin"
 #define PLUGIN_DESCRIPTION "vgmstream Decoder v" VERSION
 #define PLUGIN_DESCRIPTIONW L"vgmstream Decoder v" VERSIONW
@@ -76,9 +76,9 @@ DWORD WINAPI __stdcall decode(void *arg);
 /* Winamp Play extension list, to accept and associate extensions in Windows */
 #define EXTENSION_LIST_SIZE   (0x2000 * 6)
 #define EXT_BUFFER_SIZE 200
+/* fixed list to simplify but could also malloc/free on init/close */
 char working_extension_list[EXTENSION_LIST_SIZE] = {0};
 
-api_service* WASABI_API_SVC = NULL;
 api_language* WASABI_API_LNG = NULL;
 api_config *AGAVE_API_CONFIG = NULL;
 
@@ -107,11 +107,13 @@ int tagfile_disable = 0;
 static const GUID playbackConfigGroupGUID = 
 { 0xb6cb4a7c, 0xa8d0, 0x4c55, { 0x8e, 0x60, 0x9f, 0x7a, 0x7a, 0x23, 0xda, 0xf } };
 
+/* Winamp needs at least 576 16-bit samples, stereo, doubled in case DSP effects are active */
+#define SAMPLE_BUFFER_SIZE 576
+short sample_buffer[SAMPLE_BUFFER_SIZE*2 * VGMSTREAM_MAX_CHANNELS]; //todo maybe should be dynamic
 
 /* plugin state */
 VGMSTREAM * vgmstream = NULL;
 HANDLE decode_thread_handle = INVALID_HANDLE_VALUE;
-short sample_buffer[(576*2) * 2] = {0}; /* at least 576 16-bit samples, stereo, doubled in case Winamp's DSP is active */
 
 int paused = 0;
 int decode_abort = 0;
@@ -761,7 +763,7 @@ int isourfile(const in_char *fn) {
     filename = fn;
 #if 0
     //must detect empty extensions in folders with . in the name; doesn't work ok?
-    filename = wcsrrchr(fn, wa_L('\\'));
+    filename = wcsrrchr(fn, L'\\');
     if (filename == NULL)
         filename = fn;
     else
@@ -935,7 +937,9 @@ int infoDlg(const in_char *fn, HWND hwnd) {
     if (!fn || !*fn) {
         /* no filename = current playing file */
         if (!vgmstream)
-            return 0;
+		{
+			return INFOBOX_UNCHANGED;
+		}
 
         describe_vgmstream(vgmstream, description, description_size);
     }
@@ -951,7 +955,9 @@ int infoDlg(const in_char *fn, HWND hwnd) {
 
         infostream = init_vgmstream_winamp(filename, stream_index);
         if (!infostream)
-            return 0;
+		{
+			return INFOBOX_UNCHANGED;
+		}
 
         describe_vgmstream(infostream, description, description_size);
 
@@ -963,7 +969,7 @@ int infoDlg(const in_char *fn, HWND hwnd) {
         MessageBox(hwnd, AutoWide(description, CP_UTF8), TEXT("Stream info"), MB_OK);
     }
 #endif
-    return 0;
+    return INFOBOX_UNCHANGED;
 }
 
 /* retrieve title (playlist name) and time on the current or other file in the playlist */
@@ -1102,31 +1108,6 @@ DWORD WINAPI __stdcall decode(void *arg) {
                         }
                     }
                 }
-            }
-
-            /* downmix enabled (useful when the stream's channels are too much for Winamp's output) */
-            if (downmix_channels > 0 && downmix_channels < vgmstream->channels) {
-				short temp_buffer[(576*2) * 2] = {0};
-                int s, ch;
-
-                for (s = 0; s < samples_to_do; s++) {
-                    /* copy channels up to max */
-                    for (ch = 0; ch < downmix_channels; ch++) {
-                        temp_buffer[s*downmix_channels + ch] = sample_buffer[s*vgmstream->channels + ch];
-                    }
-                    /* then mix the rest */
-                    for (ch = downmix_channels; ch < vgmstream->channels; ch++) {
-                        int downmix_ch = ch % downmix_channels;
-                        int new_sample = ((int)temp_buffer[s*downmix_channels + downmix_ch] + (int)sample_buffer[s*vgmstream->channels + ch]);
-                        new_sample = (int)(new_sample * 0.7); /* limit clipping without removing too much loudness... hopefully */
-                        if (new_sample > 32767) new_sample = 32767;
-                        else if (new_sample < -32768) new_sample = -32768;
-                        temp_buffer[s*downmix_channels + downmix_ch] = (short)new_sample;
-                    }
-                }
-
-                /* copy back to global buffer... in case of multithreading stuff? */
-                memcpy(sample_buffer,temp_buffer, samples_to_do*downmix_channels*sizeof(short));
             }
 
             /* output samples */
@@ -1282,11 +1263,12 @@ static void load_tagfile_info(in_char *filename) {
     /* load all tags from tagfile */
     tagFile = open_winamp_streamfile_by_wpath(tagfile_path_i);
     if (tagFile != NULL) {
-		VGMSTREAM_TAGS tag = {0};
+        const char *tag_key, *tag_val;
         int i;
 
-        vgmstream_tags_reset(&tag, filename_utf8);
-        while (vgmstream_tags_next_tag(&tag, tagFile)) {
+		VGMSTREAM_TAGS *tags = vgmstream_tags_init(&tag_key, &tag_val);
+        vgmstream_tags_reset(tags, filename_utf8);
+        while (vgmstream_tags_next_tag(tags, tagFile)) {
             int repeated_tag = 0;
             int current_tag = last_tags.tag_count;
             if (current_tag >= WINAMP_TAGS_ENTRY_MAX)
@@ -1294,7 +1276,7 @@ static void load_tagfile_info(in_char *filename) {
 
             /* should overwrite repeated tags as global tags may appear multiple times */
             for (i = 0; i < current_tag; i++) {
-                if (strcmp(last_tags.keys[i], tag.key) == 0) {
+                if (strcmp(last_tags.keys[i], tag_key) == 0) {
                     current_tag = i;
                     repeated_tag = 1;
                     break;
@@ -1302,13 +1284,14 @@ static void load_tagfile_info(in_char *filename) {
             }
 
             last_tags.keys[current_tag][0] = '\0';
-            strncat(last_tags.keys[current_tag], tag.key, WINAMP_TAGS_ENTRY_SIZE);
+            strncat(last_tags.keys[current_tag], tag_key, WINAMP_TAGS_ENTRY_SIZE);
             last_tags.vals[current_tag][0] = '\0';
-            strncat(last_tags.vals[current_tag], tag.val, WINAMP_TAGS_ENTRY_SIZE);
+            strncat(last_tags.vals[current_tag], tag_val, WINAMP_TAGS_ENTRY_SIZE);
             if (!repeated_tag)
                 last_tags.tag_count++;
         }
 
+        vgmstream_tags_close(tags);
         close_streamfile(tagFile);
         last_tags.loaded = 1;
     }
@@ -1325,22 +1308,38 @@ static int winampGetExtendedFileInfo_common(in_char *filename, char *metadata, c
 
     /* load list current tags, if necessary */
     load_tagfile_info(filename);
-    if (!last_tags.loaded) /* tagfile not found, fail so default get_title takes over */
+	if (!last_tags.loaded) { /* tagfile not found, fail so default get_title takes over */
+		// this needs to be returned where possible
+		// otherwise a slew of things will fail to
+		// work as expected (e.g. waveform seeker)
+		if (strcasecmp(metadata, "length") == 0) {
+			goto get_length;
+		}
         goto fail;
+	}
 
     /* always called (value in ms), must return ok so other tags get called */
     if (strcasecmp(metadata, "length") == 0) {
-        strcpy(ret, "0");//todo should export but shows GetFileInfo's ms if not provided
+get_length:
+        //strcpy(ret, "0");//todo should export but shows GetFileInfo's ms if not provided
+		char *fn = AutoCharDup(filename);
+		if (fn)
+		{
+			VGMSTREAM * infostream = init_vgmstream(fn);
+			if (!infostream)
+			{
+				free(fn);
+    }
+			else
+			{
+				_itoa_s(get_vgmstream_play_samples(loop_count, fade_seconds, fade_delay_seconds, infostream) *
+						1000LL / infostream->sample_rate, ret, retlen, 10);
+				close_vgmstream(infostream);
+				infostream = NULL;
+			}
+		}
         return 1;
     }
-
-#if 0
-    /* special case to fill WA5's unified dialog */
-    if (strcasecmp(metadata, "formatinformation") == 0) {
-        generate_format_string(...);
-    }
-#endif
-
 
     /* find requested tag */
     tag_found = 0;
@@ -1488,23 +1487,175 @@ extern "C" __declspec (dllexport) int winampGetExtendedFileInfoW(wchar_t *filena
 /* *********************************** */
 /* placeholder for conversion api support */
 
+// TODO need to finish this off so it's not using globals
+
+short ext_sample_buffer[SAMPLE_BUFFER_SIZE * 2 * VGMSTREAM_MAX_CHANNELS]; //todo maybe should be dynamic
+
+int ext_seek_needed_samples = -1;
+int ext_decode_pos_samples = 0;
+int ext_stream_length_samples = -1;
+int ext_fade_samples = 0;
+int ext_output_channels = 0;
+
 extern "C" __declspec(dllexport) intptr_t winampGetExtendedRead_openW(const wchar_t *fn, int *size, int *bps, int *nch, int *srate)
 {
-	return 0;
+	read_config();
+
+	VGMSTREAM *ext_vgmstream = NULL;
+	in_char filename[PATH_LIMIT] = {0};
+	int stream_index = 0;
+
+	/* check for info encoded in the filename */
+	parse_fn_string(fn, NULL, filename, PATH_LIMIT);
+	parse_fn_int(fn, L"$s", &stream_index);
+
+	/* open the stream */
+	ext_vgmstream = init_vgmstream_winamp(filename, stream_index);
+	if (!ext_vgmstream) {
+		return NULL;
+	}
+
+	/* config */
+	/*set_config_defaults(&ext_config);
+	apply_config(ext_vgmstream, &ext_config);*/
+
+	/* enable after all config but before outbuf (though ATM outbuf is not dynamic so no need to read input_channels) */
+	vgmstream_mixing_autodownmix(ext_vgmstream, downmix_channels);
+	vgmstream_mixing_enable(ext_vgmstream, SAMPLE_BUFFER_SIZE, NULL /*&input_channels*/, &ext_output_channels);
+
+	/* reset internals */
+	ext_seek_needed_samples = -1;
+	ext_decode_pos_samples = 0;
+	ext_stream_length_samples = get_vgmstream_play_samples(loop_count, fade_seconds, fade_delay_seconds, ext_vgmstream);
+	ext_fade_samples = (int)(fade_seconds * ext_vgmstream->sample_rate);
+
+	if (size) {
+		*size = ext_stream_length_samples * ext_output_channels * 2;
+	}
+
+	if (bps) {
+		*bps = 16;
+	}
+
+	if (nch) {
+		*nch = ext_output_channels;
+	}
+
+	if (srate) {
+		*srate = ext_vgmstream->sample_rate;
+	}
+	
+	return (intptr_t)ext_vgmstream;
 }
 
 extern "C" __declspec(dllexport) size_t winampGetExtendedRead_getData(intptr_t handle, char *dest, size_t len, int *killswitch)
 {
+	const int max_buffer_samples = SAMPLE_BUFFER_SIZE;
+	const int max_samples = ext_stream_length_samples;
+	unsigned copied = 0;
+	int done = 0;
+
+	VGMSTREAM *ext_vgmstream = (VGMSTREAM *)handle;
+	if (!ext_vgmstream) {
 	return 0;
+}
+
+	while (copied + max_buffer_samples * ext_vgmstream->channels * 2 < len && !done) {
+		int samples_to_do;
+		if (ext_decode_pos_samples + max_buffer_samples > ext_stream_length_samples
+			&& (!loop_forever || !ext_vgmstream->loop_flag))
+			samples_to_do = ext_stream_length_samples - ext_decode_pos_samples;
+		else
+			samples_to_do = max_buffer_samples;
+
+		/* seek setup (max samples to skip if still seeking, mark done) */
+		if (ext_seek_needed_samples != -1) {
+			/* reset if we need to seek backwards */
+			if (ext_seek_needed_samples < ext_decode_pos_samples) {
+				reset_vgmstream(ext_vgmstream);
+				//apply_config(ext_vgmstream, &ext_config); /* config is undone by reset */
+
+				ext_decode_pos_samples = 0;
+			}
+
+			/* adjust seeking past file, can happen using the right (->) key
+			 * (should be done here and not in SetOutputTime due to threads/race conditions) */
+			if (ext_seek_needed_samples > max_samples && !loop_forever) {
+				ext_seek_needed_samples = max_samples;
+			}
+
+			/* adjust max samples to seek */
+			if (ext_decode_pos_samples < ext_seek_needed_samples) {
+				samples_to_do = ext_seek_needed_samples - ext_decode_pos_samples;
+				if (samples_to_do > max_buffer_samples) {
+					samples_to_do = max_buffer_samples;
+			}
+			}
+			else {
+				ext_seek_needed_samples = -1;
+			}
+		}
+
+		if (!samples_to_do) { /* track finished */
+			break;
+		}
+		else if (ext_seek_needed_samples != -1) { /* seek */
+			render_vgmstream(ext_sample_buffer, samples_to_do, ext_vgmstream);
+
+			/* discard decoded samples and keep seeking */
+			ext_decode_pos_samples += samples_to_do;
+		}
+		else { /* decode */
+			render_vgmstream(ext_sample_buffer, samples_to_do, ext_vgmstream);
+
+			/* fade near the end */
+			if (ext_vgmstream->loop_flag && ext_fade_samples > 0 && !loop_forever) {
+				int fade_channels = ext_output_channels;
+				int samples_into_fade = ext_decode_pos_samples - (ext_stream_length_samples - ext_fade_samples);
+				if (samples_into_fade + ext_decode_pos_samples > 0) {
+					int j, k;
+					for (j = 0; j < samples_to_do; j++, samples_into_fade++) {
+						if (samples_into_fade > 0) {
+							const double fadedness = (double)(ext_fade_samples - samples_into_fade) / ext_fade_samples;
+							for (k = 0; k < fade_channels; k++) {
+								ext_sample_buffer[j*fade_channels + k] =
+									(short)(ext_sample_buffer[j*fade_channels + k] * fadedness);
+							}
+						}
+					}
+				}
+			}
+
+			/* output samples */
+			memcpy(&dest[copied], ext_sample_buffer, samples_to_do * ext_output_channels * 2);
+			copied += samples_to_do * ext_output_channels * 2;
+
+			ext_decode_pos_samples += samples_to_do;
+		}
+
+		if (killswitch && *killswitch) {
+			break;
+		}
+	}
+	return copied;
 }
 
 extern "C" __declspec(dllexport) int winampGetExtendedRead_setTime(intptr_t handle, int millisecs)
 {
+	VGMSTREAM *ext_vgmstream = (VGMSTREAM *)handle;
+	if (ext_vgmstream) {
+		ext_seek_needed_samples = (long long)millisecs * ext_vgmstream->sample_rate / 1000LL;
+		return 1;
+	}
 	return 0;
 }
 
 extern "C" __declspec(dllexport) void winampGetExtendedRead_close(intptr_t handle)
 {
+	VGMSTREAM *ext_vgmstream = (VGMSTREAM *)handle;
+	if (ext_vgmstream) {
+		close_vgmstream(ext_vgmstream);
+	}
 }
 
 extern "C" __declspec(dllexport) int winampUninstallPlugin(HINSTANCE hDllInst, HWND hwndDlg, int param)

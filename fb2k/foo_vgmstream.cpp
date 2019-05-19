@@ -20,7 +20,7 @@ extern "C" {
 #include "foo_filetypes.h"
 
 #ifndef VERSION
-#include "../version.h"
+#include "version.h"
 #endif
 
 #ifndef VERSION
@@ -43,6 +43,7 @@ input_vgmstream::input_vgmstream() {
     vgmstream = NULL;
     subsong = 0; // 0 = not set, will be properly changed on first setup_vgmstream
     direct_subsong = false;
+    output_channels = 0;
 
     decoding = false;
     paused = 0;
@@ -60,7 +61,7 @@ input_vgmstream::input_vgmstream() {
     disable_subsongs = false;
     downmix_channels = 0;
     tagfile_disable = false;
-    tagfile_name = "!tags.m3u"; //todo make configurable
+    tagfile_name = "!tags.m3u";
     override_title = false;
 
     load_settings();
@@ -131,19 +132,19 @@ void input_vgmstream::get_info(t_uint32 p_subsong, file_info & p_info, abort_cal
     int length_in_ms=0, channels = 0, samplerate = 0;
     int total_samples = -1;
     int bitrate = 0;
-    int loop_start = -1, loop_end = -1;
+    int loop_flag = -1, loop_start = -1, loop_end = -1;
     pfc::string8 description;
     pfc::string8_fast temp;
 
-    get_subsong_info(p_subsong, temp, &length_in_ms, &total_samples, &loop_start, &loop_end, &samplerate, &channels, &bitrate, description, p_abort);
+    get_subsong_info(p_subsong, temp, &length_in_ms, &total_samples, &loop_flag, &loop_start, &loop_end, &samplerate, &channels, &bitrate, description, p_abort);
 
 
     /* set tag info (metadata tab in file properties) */
 
     /* Shows a custom subsong title by default with subsong name, to simplify for average users.
-     * This can be overriden and extended and using the exported STREAM_x below and foobar's formatting.
+     * This can be overriden and extended using the exported STREAM_x below and foobar's formatting.
      * foobar defaults to filename minus extension if there is no meta "title" value. */
-    if (!override_title && get_subsong_count() > 1) {
+    if (!override_title) {
         p_info.meta_set("TITLE",temp);
     }
     if (get_description_tag(temp,description,"stream count: ")) p_info.meta_set("stream_count",temp);
@@ -170,12 +171,21 @@ void input_vgmstream::get_info(t_uint32 p_subsong, file_info & p_info, abort_cal
 
         STREAMFILE *tagFile = open_foo_streamfile(tagfile_path, &p_abort, &stats);
         if (tagFile != NULL) {
-            VGMSTREAM_TAGS tag;
-            vgmstream_tags_reset(&tag, filename);
-            while (vgmstream_tags_next_tag(&tag, tagFile)) {
-                p_info.meta_set(tag.key,tag.val);
-            }
+            VGMSTREAM_TAGS *tags;
+            const char *tag_key, *tag_val;
 
+            tags = vgmstream_tags_init(&tag_key, &tag_val);
+            vgmstream_tags_reset(tags, filename);
+            while (vgmstream_tags_next_tag(tags, tagFile)) {
+                if (replaygain_info::g_is_meta_replaygain(tag_key)) {
+                    p_info.info_set_replaygain(tag_key,tag_val);
+                    /* there is info_set_replaygain_auto too but no doc */
+                }
+                else {
+                    p_info.meta_set(tag_key,tag_val);
+                }
+            }
+            vgmstream_tags_close(tags);
             close_streamfile(tagFile);
         }
     }
@@ -193,7 +203,8 @@ void input_vgmstream::get_info(t_uint32 p_subsong, file_info & p_info, abort_cal
     p_info.info_set_bitrate(bitrate / 1000);
     if (total_samples > 0)
         p_info.info_set_int("stream_total_samples", total_samples);
-    if (loop_start >= 0 && loop_end >= loop_start) {
+    if (loop_start >= 0 && loop_end > loop_start) {
+        if (loop_flag <= 0) p_info.info_set("looping", "disabled");
         p_info.info_set_int("loop_start", loop_start);
         p_info.info_set_int("loop_end", loop_end);
     }
@@ -209,6 +220,11 @@ void input_vgmstream::get_info(t_uint32 p_subsong, file_info & p_info, abort_cal
     if (get_description_tag(temp,description,"stream count: ")) p_info.info_set("stream_count",temp);
     if (get_description_tag(temp,description,"stream index: ")) p_info.info_set("stream_index",temp);
     if (get_description_tag(temp,description,"stream name: ")) p_info.info_set("stream_name",temp);
+
+    if (get_description_tag(temp,description,"channel mask: ")) p_info.info_set("channel_mask",temp);
+    if (get_description_tag(temp,description,"output channels: ")) p_info.info_set("output_channels",temp);
+    if (get_description_tag(temp,description,"input channels: ")) p_info.info_set("input_channels",temp);
+
 }
 
 t_filestats input_vgmstream::get_file_stats(abort_callback & p_abort) {
@@ -232,16 +248,16 @@ bool input_vgmstream::decode_run(audio_chunk & p_chunk,abort_callback & p_abort)
     if (!decoding) return false;
     if (!vgmstream) return false;
 
-    int max_buffer_samples = sizeof(sample_buffer)/sizeof(sample_buffer[0])/vgmstream->channels;
+    int max_buffer_samples = SAMPLE_BUFFER_SIZE;
     int samples_to_do = max_buffer_samples;
     t_size bytes;
 
     {
         bool loop_okay = config.song_play_forever && vgmstream->loop_flag && !config.song_ignore_loop && !force_ignore_loop;
-        if (decode_pos_samples+max_buffer_samples>stream_length_samples && !loop_okay)
-            samples_to_do=stream_length_samples-decode_pos_samples;
+        if (decode_pos_samples + max_buffer_samples > stream_length_samples && !loop_okay)
+            samples_to_do = stream_length_samples - decode_pos_samples;
         else
-            samples_to_do=max_buffer_samples;
+            samples_to_do = max_buffer_samples;
 
         if (samples_to_do /*< DECODE_SIZE*/ == 0) {
             decoding = false;
@@ -253,53 +269,27 @@ bool input_vgmstream::decode_run(audio_chunk & p_chunk,abort_callback & p_abort)
 
         /* fade! */
         if (vgmstream->loop_flag && fade_samples > 0 && !loop_okay) {
+            int fade_channels = output_channels;
             int samples_into_fade = decode_pos_samples - (stream_length_samples - fade_samples);
             if (samples_into_fade + samples_to_do > 0) {
                 int j,k;
                 for (j=0;j<samples_to_do;j++,samples_into_fade++) {
                     if (samples_into_fade > 0) {
                         double fadedness = (double)(fade_samples-samples_into_fade)/fade_samples;
-                        for (k=0;k<vgmstream->channels;k++) {
-                            sample_buffer[j*vgmstream->channels+k] =
-                                (short)(sample_buffer[j*vgmstream->channels+k]*fadedness);
+                        for (k = 0; k < fade_channels; k++) {
+                            sample_buffer[j*fade_channels+k] =
+                                (short)(sample_buffer[j*fade_channels+k]*fadedness);
                         }
                     }
                 }
             }
         }
 
-        /* downmix enabled (foobar refuses to do more than 8 channels) */
-        if (downmix_channels > 0 && downmix_channels < vgmstream->channels) {
-            short temp_buffer[SAMPLE_BUFFER_SIZE];
-            int s, ch;
-
-            for (s = 0; s < samples_to_do; s++) {
-                /* copy channels up to max */
-                for (ch = 0; ch < downmix_channels; ch++) {
-                    temp_buffer[s*downmix_channels + ch] = sample_buffer[s*vgmstream->channels + ch];
-                }
-                /* then mix the rest */
-                for (ch = downmix_channels; ch < vgmstream->channels; ch++) {
-                    int downmix_ch = ch % downmix_channels;
-                    int new_sample = ((int)temp_buffer[s*downmix_channels + downmix_ch] + (int)sample_buffer[s*vgmstream->channels + ch]);
-                    new_sample = (int)(new_sample * 0.7); /* limit clipping without removing too much loudness... hopefully */
-                    if (new_sample > 32767) new_sample = 32767;
-                    else if (new_sample < -32768) new_sample = -32768;
-                    temp_buffer[s*downmix_channels + downmix_ch] = (short)new_sample;
-                }
-            }
-
-            /* copy back to global buffer... in case of multithreading stuff? */
-            memcpy(sample_buffer,temp_buffer, samples_to_do*downmix_channels*sizeof(short));
-
-            bytes = (samples_to_do*downmix_channels * sizeof(sample_buffer[0]));
-            p_chunk.set_data_fixedpoint((char*)sample_buffer, bytes, vgmstream->sample_rate, downmix_channels, 16, audio_chunk::g_guess_channel_config(downmix_channels));
-        }
-        else {
-            bytes = (samples_to_do*vgmstream->channels * sizeof(sample_buffer[0]));
-            p_chunk.set_data_fixedpoint((char*)sample_buffer, bytes, vgmstream->sample_rate, vgmstream->channels, 16, audio_chunk::g_guess_channel_config(vgmstream->channels));
-        }
-
+        unsigned channel_config = vgmstream->channel_layout;
+        if (!channel_config)
+            channel_config = audio_chunk::g_guess_channel_config(output_channels);
+        bytes = (samples_to_do*output_channels * sizeof(sample_buffer[0]));
+        p_chunk.set_data_fixedpoint((char*)sample_buffer, bytes, vgmstream->sample_rate, output_channels, 16, channel_config);
 
         decode_pos_samples+=samples_to_do;
         decode_pos_ms=decode_pos_samples*1000LL/vgmstream->sample_rate;
@@ -310,51 +300,62 @@ bool input_vgmstream::decode_run(audio_chunk & p_chunk,abort_callback & p_abort)
 
 void input_vgmstream::decode_seek(double p_seconds,abort_callback & p_abort) {
     seek_pos_samples = (int) audio_math::time_to_samples(p_seconds, vgmstream->sample_rate);
-    int max_buffer_samples = sizeof(sample_buffer)/sizeof(sample_buffer[0])/vgmstream->channels;
+    int max_buffer_samples = SAMPLE_BUFFER_SIZE;
     bool loop_okay = config.song_play_forever && vgmstream->loop_flag && !config.song_ignore_loop && !force_ignore_loop;
+    int loop_skips = 0;
+
+    // possible when disabling looping without refreshing foobar's cached song length
+    // (with infinite looping on p_seconds can't go over seek bar though)
+    if (seek_pos_samples > stream_length_samples)
+        seek_pos_samples = stream_length_samples;
 
     int corrected_pos_samples = seek_pos_samples;
 
-    // adjust for correct position within loop
-    if(vgmstream->loop_flag && (vgmstream->loop_end_sample - vgmstream->loop_start_sample) && seek_pos_samples >= vgmstream->loop_end_sample) {
+    // optimize seeks withing loops
+    if (vgmstream->loop_flag && (vgmstream->loop_end_sample - vgmstream->loop_start_sample) && seek_pos_samples >= vgmstream->loop_end_sample) {
+        int loop_length = (vgmstream->loop_end_sample - vgmstream->loop_start_sample);
+
         corrected_pos_samples -= vgmstream->loop_start_sample;
-        corrected_pos_samples %= (vgmstream->loop_end_sample - vgmstream->loop_start_sample);
+        loop_skips = corrected_pos_samples / loop_length;
+        corrected_pos_samples %= loop_length;
         corrected_pos_samples += vgmstream->loop_start_sample;
     }
 
     // Allow for delta seeks forward, by up to the total length of the stream, if the delta is less than the corrected offset
-    if(decode_pos_samples > corrected_pos_samples && decode_pos_samples <= seek_pos_samples &&
-       (seek_pos_samples - decode_pos_samples) < stream_length_samples) {
+    if (decode_pos_samples > corrected_pos_samples && decode_pos_samples <= seek_pos_samples &&
+            (seek_pos_samples - decode_pos_samples) < stream_length_samples) {
         if (corrected_pos_samples > (seek_pos_samples - decode_pos_samples))
             corrected_pos_samples = seek_pos_samples;
     }
-
     // Reset of backwards seek
     else if(corrected_pos_samples < decode_pos_samples) {
         reset_vgmstream(vgmstream);
         apply_config(vgmstream, &config); /* config is undone by reset */
-
         decode_pos_samples = 0;
     }
 
     // seeking overrun = bad
-    if(corrected_pos_samples > stream_length_samples) corrected_pos_samples = stream_length_samples;
+    if (corrected_pos_samples > stream_length_samples)
+        corrected_pos_samples = stream_length_samples;
 
-    while(decode_pos_samples<corrected_pos_samples) {
+    while(decode_pos_samples < corrected_pos_samples) {
         int seek_samples = max_buffer_samples;
-        if((decode_pos_samples+max_buffer_samples>=stream_length_samples) && !loop_okay)
-            seek_samples=stream_length_samples-seek_pos_samples;
-        if(decode_pos_samples+max_buffer_samples>seek_pos_samples)
-            seek_samples=seek_pos_samples-decode_pos_samples;
+        if((decode_pos_samples + max_buffer_samples >= stream_length_samples) && !loop_okay)
+            seek_samples = stream_length_samples - seek_pos_samples;
+        if(decode_pos_samples + max_buffer_samples > seek_pos_samples)
+            seek_samples = seek_pos_samples - decode_pos_samples;
 
-        decode_pos_samples+=seek_samples;
-        render_vgmstream(sample_buffer,seek_samples,vgmstream);
+        decode_pos_samples += seek_samples;
+        render_vgmstream(sample_buffer, seek_samples, vgmstream);
     }
 
-    // remove seek loop correction from counter so file ends correctly
-    decode_pos_samples=seek_pos_samples;
+    // seek may have been clamped to skip unneeded loops, adjust as some internals need this value
+    vgmstream->loop_count += loop_skips; //todo evil, make seek_vgmstream
 
-    decode_pos_ms=decode_pos_samples*1000LL/vgmstream->sample_rate;
+    // remove seek loop correction from counter so file ends correctly
+    decode_pos_samples = seek_pos_samples;
+
+    decode_pos_ms = decode_pos_samples * 1000LL / vgmstream->sample_rate;
 
     decoding = loop_okay || decode_pos_samples < stream_length_samples;
 }
@@ -427,6 +428,10 @@ void input_vgmstream::setup_vgmstream(abort_callback & p_abort) {
     set_config_defaults(&config);
     apply_config(vgmstream, &config);
 
+    /* enable after all config but before outbuf (though ATM outbuf is not dynamic so no need to read input_channels) */
+    vgmstream_mixing_autodownmix(vgmstream, downmix_channels);
+    vgmstream_mixing_enable(vgmstream, SAMPLE_BUFFER_SIZE, NULL /*&input_channels*/, &output_channels);
+
     decode_pos_ms = 0;
     decode_pos_samples = 0;
     paused = 0;
@@ -434,11 +439,12 @@ void input_vgmstream::setup_vgmstream(abort_callback & p_abort) {
     fade_samples = (int)(config.song_fade_time * vgmstream->sample_rate);
 }
 
-void input_vgmstream::get_subsong_info(t_uint32 p_subsong, pfc::string_base & title, int *length_in_ms, int *total_samples, int *loop_start, int *loop_end, int *sample_rate, int *channels, int *bitrate, pfc::string_base & description, abort_callback & p_abort) {
+void input_vgmstream::get_subsong_info(t_uint32 p_subsong, pfc::string_base & title, int *length_in_ms, int *total_samples, int *loop_flag, int *loop_start, int *loop_end, int *sample_rate, int *channels, int *bitrate, pfc::string_base & description, abort_callback & p_abort) {
     VGMSTREAM * infostream = NULL;
     bool is_infostream = false;
     foobar_song_config infoconfig;
     char temp[1024];
+    int info_channels;
 
     // reuse current vgmstream if not querying a new subsong
     // if it's a direct subsong then subsong may be N while p_subsong 1
@@ -451,26 +457,30 @@ void input_vgmstream::get_subsong_info(t_uint32 p_subsong, pfc::string_base & ti
         set_config_defaults(&infoconfig);
         apply_config(infostream,&infoconfig);
         is_infostream = true;
+
+        vgmstream_mixing_autodownmix(infostream, downmix_channels);
+        vgmstream_mixing_enable(infostream, 0, NULL /*&input_channels*/, &info_channels);
     } else {
         // vgmstream ready as get_info is valid after open() with any reason
         infostream = vgmstream;
         infoconfig = config;
+        info_channels = output_channels;
     }
 
 
     if (length_in_ms) {
         *length_in_ms = -1000;
         if (infostream) {
-            int num_samples = get_vgmstream_play_samples(infoconfig.song_loop_count,infoconfig.song_fade_time,infoconfig.song_fade_delay,infostream);
-            *length_in_ms = num_samples*1000LL / infostream->sample_rate;
+            *channels = info_channels;
             *sample_rate = infostream->sample_rate;
-            *channels = infostream->channels;
             *total_samples = infostream->num_samples;
             *bitrate = get_vgmstream_average_bitrate(infostream);
-            if (infostream->loop_flag) {
-                *loop_start = infostream->loop_start_sample;
-                *loop_end = infostream->loop_end_sample;
-            }
+            *loop_flag = infostream->loop_flag;
+            *loop_start = infostream->loop_start_sample;
+            *loop_end = infostream->loop_end_sample;
+
+            int num_samples = get_vgmstream_play_samples(infoconfig.song_loop_count,infoconfig.song_fade_time,infoconfig.song_fade_delay,infostream);
+            *length_in_ms = num_samples*1000LL / infostream->sample_rate;
 
             char temp[1024];
             describe_vgmstream(infostream, temp, 1024);
@@ -478,26 +488,32 @@ void input_vgmstream::get_subsong_info(t_uint32 p_subsong, pfc::string_base & ti
         }
     }
 
-    if (title) {
+
+    /* infostream gets added with index 0 (other) or 1 (current) */
+    if (infostream && title) {
         const char *p = filename + strlen(filename);
         while (*p != '\\' && p >= filename) p--;
         p++;
         const char *e = filename + strlen(filename);
         while (*e != '.' && e >= filename) e--;
+        title.set_string(p, e - p); /* name without ext */
 
-        title.set_string(p, e - p);
+        const char* info_name = infostream->stream_name;
+        int info_streams = infostream->num_streams;
+        int info_subsong = infostream->stream_index;
+        if (info_subsong == 0)
+            info_subsong = 1;
 
-        if (!disable_subsongs && infostream && infostream->num_streams > 1) {
-            int info_subsong = infostream->stream_index;
-            if (info_subsong==0)
-                info_subsong = 1;
+        /* show number if file has more than 1 subsong */
+        if (info_streams > 1) {
             sprintf(temp,"#%d",info_subsong);
             title += temp;
+        }
 
-            if (infostream->stream_name[0] != '\0') {
-                sprintf(temp," (%s)",infostream->stream_name);
-                title += temp;
-            }
+        /* show name if file has subsongs (implicitly shows also for TXTP) */
+        if (info_name[0] != '\0' && info_streams > 0) {
+            sprintf(temp," (%s)",info_name);
+            title += temp;
         }
     }
 

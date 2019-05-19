@@ -278,6 +278,18 @@ static void lse_ff_ogg_decryption_callback(void *ptr, size_t size, size_t nmemb,
     }
 }
 
+static const uint32_t xiph_mappings[] = {
+        0,
+        mapping_MONO,
+        mapping_STEREO,
+        mapping_2POINT1_xiph,
+        mapping_QUAD,
+        mapping_5POINT0_xiph,
+        mapping_5POINT1,
+        mapping_7POINT0,
+        mapping_7POINT1,
+};
+
 
 /* Ogg Vorbis, by way of libvorbisfile; may contain loop comments */
 VGMSTREAM * init_vgmstream_ogg_vorbis(STREAMFILE *streamFile) {
@@ -301,8 +313,9 @@ VGMSTREAM * init_vgmstream_ogg_vorbis(STREAMFILE *streamFile) {
      * .adx: KID [Remember11 (PC)]
      * .rof: The Rhythm of Fighters (Mobile)
      * .acm: Planescape Torment Enhanced Edition (PC)
-     * .sod: Zone 4 (PC) */
-    if (check_extensions(streamFile,"ogg,logg,adx,rof,acm,sod")) {
+     * .sod: Zone 4 (PC)
+     * .aif/laif/aif-Loop: Psychonauts (PC) raw extractions (named) */
+    if (check_extensions(streamFile,"ogg,logg,adx,rof,acm,sod,aif,laif,aif-Loop")) {
         is_ogg = 1;
     } else if (check_extensions(streamFile,"um3")) {
         is_um3 = 1;
@@ -372,6 +385,7 @@ VGMSTREAM * init_vgmstream_ogg_vorbis(STREAMFILE *streamFile) {
             ovmi.xor_value = read_32bitBE(0x00,streamFile);
             ovmi.decryption_callback = sngw_ogg_decryption_callback;
         }
+        ovmi.disable_reordering = 1; /* must be an MT Framework thing */
         ovmi.meta_type = meta_OGG_encrypted;
     }
 
@@ -531,6 +545,9 @@ VGMSTREAM * init_vgmstream_ogg_vorbis_callbacks(STREAMFILE *streamFile, ov_callb
     data->bitstream = OGG_DEFAULT_BITSTREAM;
     vi = ov_info(ovf,OGG_DEFAULT_BITSTREAM);
 
+    /* other settings */
+    data->disable_reordering = ovmi->disable_reordering;
+
     /* search for loop comments */
     {
         int i;
@@ -646,6 +663,10 @@ VGMSTREAM * init_vgmstream_ogg_vorbis_callbacks(STREAMFILE *streamFile, ov_callb
     vgmstream->coding_type = coding_OGG_VORBIS;
     vgmstream->layout_type = layout_none;
     vgmstream->meta_type = ovmi->meta_type;
+
+    if (vgmstream->channels <= 8) {
+        vgmstream->channel_layout = xiph_mappings[vgmstream->channels];
+    }
 
     return vgmstream;
 
