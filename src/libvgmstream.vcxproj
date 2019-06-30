@@ -116,6 +116,7 @@
     <ClInclude Include="meta\ppst_streamfile.h" />
     <ClInclude Include="meta\vsv_streamfile.h" />
     <ClInclude Include="meta\mta2_streamfile.h" />
+    <ClInclude Include="meta\ogg_vorbis_streamfile.h" />
     <ClInclude Include="meta\opus_interleave_streamfile.h" />
     <ClInclude Include="meta\sfh_streamfile.h" />
     <ClInclude Include="meta\sqex_scd_streamfile.h" />
@@ -156,6 +157,7 @@
     <ClCompile Include="meta\bcstm.c" />
     <ClCompile Include="meta\bfstm.c" />
     <ClCompile Include="meta\bfwav.c" />
+    <ClCompile Include="meta\bwav.c" />
     <ClCompile Include="meta\excitebots.c" />
     <ClCompile Include="meta\ezw.c" />
     <ClCompile Include="meta\ffmpeg.c" />
@@ -278,6 +280,7 @@
     <ClCompile Include="meta\flx.c" />
     <ClCompile Include="meta\fsb.c" />
     <ClCompile Include="meta\fsb5.c" />
+    <ClCompile Include="meta\fsb5_fev.c" />
     <ClCompile Include="meta\fsb_encrypted.c" />
     <ClCompile Include="meta\gca.c" />
     <ClCompile Include="meta\gcsw.c" />

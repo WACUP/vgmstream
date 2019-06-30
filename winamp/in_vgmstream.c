@@ -74,7 +74,7 @@ extern In_Module plugin; /* the input module, declared at the bottom of this fil
 DWORD WINAPI __stdcall decode(void *arg);
 
 /* Winamp Play extension list, to accept and associate extensions in Windows */
-#define EXTENSION_LIST_SIZE   (0x2000 * 6)
+#define EXTENSION_LIST_SIZE   (0x2000 * 8)
 #define EXT_BUFFER_SIZE 200
 /* fixed list to simplify but could also malloc/free on init/close */
 char working_extension_list[EXTENSION_LIST_SIZE] = {0};
@@ -628,6 +628,7 @@ static int parse_fn_int(const in_char * fn, const in_char * tag, int * num) {
     }
 }
 
+#if 0
 /* Adds ext to Winamp's extension list */
 static void add_extension(int length, char * dst, const char * ext) {
     char buf[EXT_BUFFER_SIZE] = {0};
@@ -660,12 +661,13 @@ static void add_extension(int length, char * dst, const char * ext) {
 
     /* copy new extension + double null terminate */
 	/*ex: "vgmstream\0vgmstream Audio File (*.VGMSTREAM)\0" */
-    written = sprintf(buf, "%s%c%s Audio File (*.%s)%c", ext,'\0',ext_upp,ext_upp,'\0');
+    written = sprintf(buf, "%s%c%s Video Game Music File (*.%s)%c", ext,'\0',ext_upp,ext_upp,'\0');
     for (j = 0; j < written; i++,j++)
         dst[i] = buf[j];
     dst[i] = '\0';
     dst[i + 1] = '\0';
 }
+#endif
 
 /* Creates Winamp's extension list, a single string that ends with \0\0.
  * Each extension must be in this format: "extension\0Description\0" */
@@ -673,9 +675,30 @@ static void build_extension_list() {
     size_t ext_list_len = 0, i;
     const char ** ext_list = vgmstream_get_formats(&ext_list_len);
 
-    for (i = 0; i < ext_list_len; i++) {
+	// this original code provides one entry per extension
+	// which is not ideal when the filter list its used in
+	// can only go upto 260 characters so instead...
+    /*for (i = 0; i < ext_list_len; i++) {
         add_extension(EXTENSION_LIST_SIZE, working_extension_list, ext_list[i]);
+    }*/
+
+	// this version keeps it to one filter list entry with
+	// all of the extensions reported against it which has
+	// the helping factor of making it more likely they'll
+	// actually be added into the filter list selection :)
+	for (i = 0; i < ext_list_len; i++) {
+		if (*working_extension_list)
+		{
+			strncat(working_extension_list, ";", EXTENSION_LIST_SIZE);
     }
+		strncat(working_extension_list, ext_list[i], EXTENSION_LIST_SIZE);
+	}
+	char *list = working_extension_list + strlen(working_extension_list) + 1;
+	if (list)
+	{
+		strcat(list, "Video Game Music File\0");
+	}
+	//MessageBoxA(0, working_extension_list, 0, 0);
 }
 
 /* unicode utils */
