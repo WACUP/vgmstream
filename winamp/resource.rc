@@ -1,48 +1,150 @@
+// Microsoft Visual C++ generated resource script.
+//
 #include "resource.h"
-//#include "afxres.h"
-#include <windows.h>
-#define IDC_STATIC -1
 
-//elements: text, id, x, y, width, height [, style [, extended-style]]
-IDD_CONFIG DIALOGEX 0, 0, 187, 164
-STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
-CAPTION "in_vgmstream configuration"
-FONT 8, "MS Sans Serif", 0, 0, 0x0
+#define APSTUDIO_READONLY_SYMBOLS
+/////////////////////////////////////////////////////////////////////////////
+//
+// Generated from the TEXTINCLUDE 2 resource.
+//
+#include "afxres.h"
+
+/////////////////////////////////////////////////////////////////////////////
+#undef APSTUDIO_READONLY_SYMBOLS
+
+/////////////////////////////////////////////////////////////////////////////
+// English (United Kingdom) resources
+
+#if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_ENG)
+LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_UK
+#pragma code_page(1252)
+
+#ifdef APSTUDIO_INVOKED
+/////////////////////////////////////////////////////////////////////////////
+//
+// TEXTINCLUDE
+//
+
+1 TEXTINCLUDE 
 BEGIN
-    // right column
-    DEFPUSHBUTTON   "OK",IDOK,129,7,50,14
-    PUSHBUTTON      "Cancel",IDCANCEL,129,24,50,14
-    PUSHBUTTON      "Default",IDC_DEFAULT_BUTTON,129,41,50,14
-
-    LTEXT           "Thread Priority",IDC_STATIC,110,60,46,8
-    CONTROL         "Slider1",IDC_THREAD_PRIORITY_SLIDER,"msctls_trackbar32",TBS_AUTOTICKS | WS_TABSTOP,96,76,77,10
-    CTEXT           "DATARIFIC",IDC_THREAD_PRIORITY_TEXT,96,92,77,18
-
-    LTEXT           "ReplayGain",IDC_STATIC,100,108,38,8
-    COMBOBOX        IDC_REPLAYGAIN,95,118,80,30,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
-    LTEXT           "Clip Protect",IDC_STATIC,100,135,37,8
-    COMBOBOX        IDC_CLIPPROTECT,95,145,80,30,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
-
-    // left column
-    LTEXT           "Loop Count",IDC_STATIC,7,10,44,12
-    EDITTEXT        IDC_LOOP_COUNT,52,7,39,14,ES_AUTOHSCROLL
-
-    LTEXT           "Fade Length",IDC_STATIC,7,25,41,8
-    EDITTEXT        IDC_FADE_SECONDS,52,23,39,14,ES_AUTOHSCROLL
-    LTEXT           "seconds",IDC_STATIC,93,25,29,11
-
-    LTEXT           "Fade Delay",IDC_STATIC,7,40,41,8
-    EDITTEXT        IDC_FADE_DELAY_SECONDS,52,38,39,14,ES_AUTOHSCROLL
-    LTEXT           "seconds",IDC_STATIC,93,40,29,11
-
-    CONTROL         "Loop normally",IDC_LOOP_NORMALLY,"Button",BS_AUTORADIOBUTTON | WS_TABSTOP,7,57,77,10
-    CONTROL         "Loop forever",IDC_LOOP_FOREVER,"Button",BS_AUTORADIOBUTTON | WS_TABSTOP,7,70,77,10
-    CONTROL         "Ignore looping",IDC_IGNORE_LOOP,"Button",BS_AUTORADIOBUTTON | WS_TABSTOP,7,83,77,10
-
-    CONTROL         "Disable subsongs",IDC_DISABLE_SUBSONGS,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,7,99,87,10
-
-    LTEXT           "Downmix",IDC_STATIC,7,115,48,12
-    EDITTEXT        IDC_DOWNMIX_CHANNELS,52,112,37,14,ES_AUTOHSCROLL
-    
-    CONTROL         "Disable tagfile",IDC_TAGFILE_DISABLE,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,7,131,87,10
+    "resource.h\0"
 END
+
+2 TEXTINCLUDE 
+BEGIN
+    "#include ""afxres.h""\r\n"
+    "\0"
+END
+
+3 TEXTINCLUDE 
+BEGIN
+    "\r\n"
+    "\0"
+END
+
+#endif    // APSTUDIO_INVOKED
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Dialog
+//
+
+IDD_CONFIG DIALOGEX 0, 0, 148, 185
+STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "vgmstream Decoder Configuration"
+FONT 8, "MS Shell Dlg", 0, 0, 0x1
+BEGIN
+    GROUPBOX        "",IDC_STATIC,5,1,135,160
+    RTEXT           "Loop Count:",IDC_STATIC,12,13,44,8
+    EDITTEXT        IDC_LOOP_COUNT,63,10,39,14,ES_AUTOHSCROLL
+    RTEXT           "Fade Length:",IDC_STATIC,12,31,44,8
+    EDITTEXT        IDC_FADE_SECONDS,63,28,39,14,ES_AUTOHSCROLL
+    LTEXT           "seconds",IDC_STATIC,107,31,29,8
+    RTEXT           "Fade Delay:",IDC_STATIC,14,49,42,8
+    EDITTEXT        IDC_FADE_DELAY_SECONDS,63,46,39,14,ES_AUTOHSCROLL
+    LTEXT           "seconds",IDC_STATIC,107,49,29,8
+    CONTROL         "Loop normally",IDC_LOOP_NORMALLY,"Button",BS_AUTORADIOBUTTON | WS_TABSTOP,14,67,77,10
+    CONTROL         "Loop forever",IDC_LOOP_FOREVER,"Button",BS_AUTORADIOBUTTON | WS_TABSTOP,14,81,77,10
+    CONTROL         "Ignore looping",IDC_IGNORE_LOOP,"Button",BS_AUTORADIOBUTTON | WS_TABSTOP,14,95,77,10
+    CONTROL         "Disable subsongs",IDC_DISABLE_SUBSONGS,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,14,113,87,10
+    RTEXT           "Downmix:",IDC_STATIC,14,130,44,8
+    EDITTEXT        IDC_DOWNMIX_CHANNELS,63,127,39,14,ES_AUTOHSCROLL
+    CONTROL         "Disable tagfile",IDC_TAGFILE_DISABLE,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,14,145,87,10
+    PUSHBUTTON      "&Default",IDC_DEFAULT_BUTTON,6,166,50,14
+    DEFPUSHBUTTON   "&OK",IDOK,91,166,50,14
+END
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Version
+//
+
+VS_VERSION_INFO VERSIONINFO
+ FILEVERSION 2,1,1050,2359
+ PRODUCTVERSION 2,1,1050,2359
+ FILEFLAGSMASK 0x3fL
+#ifdef _DEBUG
+ FILEFLAGS 0x1L
+#else
+ FILEFLAGS 0x0L
+#endif
+ FILEOS 0x40004L
+ FILETYPE 0x2L
+ FILESUBTYPE 0x0L
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "080904b0"
+        BEGIN
+            VALUE "CompanyName", "WACUP (WinAmp Community Update Project)"
+            VALUE "FileDescription", "Winamp Input Plug-in"
+            VALUE "FileVersion", "2.1.1050.2359"
+            VALUE "InternalName", "in_vgmstream.dll"
+            VALUE "LegalCopyright", "Copyright © 2008-2019 Halley's Comet Software + Contributors"
+            VALUE "OriginalFilename", "in_vgmstream.dll"
+            VALUE "ProductName", "vgmstream Decoder"
+            VALUE "ProductVersion", "2.1.1050.2359"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x809, 1200
+    END
+END
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// DESIGNINFO
+//
+
+#ifdef APSTUDIO_INVOKED
+GUIDELINES DESIGNINFO
+BEGIN
+    IDD_CONFIG, DIALOG
+    BEGIN
+        LEFTMARGIN, 7
+        RIGHTMARGIN, 140
+        TOPMARGIN, 7
+        BOTTOMMARGIN, 180
+    END
+END
+#endif    // APSTUDIO_INVOKED
+
+#endif    // English (United Kingdom) resources
+/////////////////////////////////////////////////////////////////////////////
+
+
+
+#ifndef APSTUDIO_INVOKED
+/////////////////////////////////////////////////////////////////////////////
+//
+// Generated from the TEXTINCLUDE 3 resource.
+//
+
+
+/////////////////////////////////////////////////////////////////////////////
+#endif    // not APSTUDIO_INVOKED
+

@@ -13,7 +13,6 @@ VGMSTREAM * init_vgmstream_hca_subkey(STREAMFILE *streamFile, uint16_t subkey) {
     hca_codec_data * hca_data = NULL;
     unsigned long long keycode = 0;
 
-
     /* checks */
     if ( !check_extensions(streamFile, "hca"))
         return NULL;
