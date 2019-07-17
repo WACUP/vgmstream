@@ -735,6 +735,7 @@ typedef enum {
     meta_XWMA_KONAMI,
     meta_9TAV,
     meta_BWAV,
+    meta_RAD,
 
 } meta_t;
 
