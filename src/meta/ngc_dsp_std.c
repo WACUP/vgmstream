@@ -253,8 +253,9 @@ VGMSTREAM * init_vgmstream_ngc_dsp_std(STREAMFILE *streamFile) {
 
     /* checks */
     /* .dsp: standard
-     * .adp: Dr. Muto/Battalion Wars (GC) mono files */
-    if (!check_extensions(streamFile, "dsp,adp"))
+     * .adp: Dr. Muto/Battalion Wars (GC) mono files
+     * (extensionless): Tony Hawk's Downhill Jam (Wii) */
+    if (!check_extensions(streamFile, "dsp,adp,"))
         goto fail;
 
     if (read_dsp_header(&header, 0x00, streamFile))
@@ -414,6 +415,7 @@ VGMSTREAM * init_vgmstream_ngc_dsp_std_le(STREAMFILE *streamFile) {
     vgmstream->meta_type = meta_DSP_STD;
     vgmstream->coding_type = coding_NGC_DSP;
     vgmstream->layout_type = layout_none;
+    vgmstream->allow_dual_stereo = 1;
 
     {
         /* adpcm coeffs/history */

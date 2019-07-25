@@ -58,10 +58,10 @@ extern api_config *configApi;
 #endif
 
 #ifndef VERSIONW
-#define VERSIONW L"2.1"
+#define VERSIONW L"2.1.2384"
 #endif
 
-#define LIBVGMSTREAM_BUILD "1050-2359-ge1184142-wacup"
+#define LIBVGMSTREAM_BUILD "1050-2384-g1fb124c2-wacup"
 #define APP_NAME "vgmstream plugin"
 #define PLUGIN_DESCRIPTION "vgmstream Decoder v" VERSION
 #define PLUGIN_DESCRIPTIONW L"vgmstream Decoder v" VERSIONW
@@ -1042,10 +1042,6 @@ void getfileinfo(const in_char *fn, in_char *title, int *length_in_ms) {
     }
 }
 
-/* eq stuff */
-void eq_set(int on, char data[10], int preamp) {
-}
-
 /* the decode thread */
 DWORD WINAPI __stdcall decode(void *arg) {
     const int max_buffer_samples = sizeof(sample_buffer) / sizeof(sample_buffer[0]) / 2 / vgmstream->channels;
@@ -1191,7 +1187,7 @@ In_Module plugin = {
     setpan,
     0,0,0,0,0,0,0,0,0, /* vis stuff */
     0,0, /* dsp stuff */
-    eq_set,
+    NULL,
     NULL, /* SetInfo */
     0 /* outMod */
 };
