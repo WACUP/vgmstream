@@ -58,10 +58,10 @@ extern api_config *configApi;
 #endif
 
 #ifndef VERSIONW
-#define VERSIONW L"2.1.2384"
+#define VERSIONW L"2.1.2395"
 #endif
 
-#define LIBVGMSTREAM_BUILD "1050-2384-g1fb124c2-wacup"
+#define LIBVGMSTREAM_BUILD "1050-2395-g056ee4fb-wacup"
 #define APP_NAME "vgmstream plugin"
 #define PLUGIN_DESCRIPTION "vgmstream Decoder v" VERSION
 #define PLUGIN_DESCRIPTIONW L"vgmstream Decoder v" VERSIONW
