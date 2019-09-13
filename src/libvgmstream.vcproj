@@ -253,6 +253,10 @@
                     >
                 </File>
                 <File
+                    RelativePath=".\meta\bgw_streamfile.h"
+                    >
+                </File>
+                <File
                     RelativePath=".\meta\ea_eaac_streamfile.h"
                     >
                 </File>
@@ -505,6 +509,10 @@
                     >
                 </File>
                 <File
+                    RelativePath=".\meta\bmp_konami.c"
+                    >
+                </File>
+                <File
                     RelativePath=".\meta\bnk_sony.c"
                     >
                 </File>
@@ -705,7 +713,11 @@
                     >
                 </File>
                 <File
-                    RelativePath=".\meta\nub_idsp.c"
+                    RelativePath=".\meta\nub.c"
+                    >
+                </File>
+                <File
+                    RelativePath=".\meta\ima.c"
                     >
                 </File>
                 <File
@@ -938,14 +950,6 @@
                     RelativePath=".\meta\opus.c"
                     >
                 </File>
-				<File
-					RelativePath=".\meta\nub_vag.c"
-					>
-				</File>
-                <File
-                    RelativePath=".\meta\nub_xma.c"
-                    >
-                </File>
                 <File
                     RelativePath=".\meta\nus3audio.c"
                     >
@@ -1019,7 +1023,7 @@
 					>
 				</File>
 				<File
-					RelativePath=".\meta\pc_snds.c"
+					RelativePath=".\meta\raw_snds.c"
 					>
 				</File>
 				<File
@@ -1139,7 +1143,7 @@
 					>
 				</File>
 				<File
-					RelativePath=".\meta\ps2_int.c"
+					RelativePath=".\meta\raw_int.c"
 					>
 				</File>
 				<File
@@ -1366,10 +1370,14 @@
                     RelativePath=".\meta\mta2.c"
                     >
                 </File>
-				<File
-					RelativePath=".\meta\ps3_past.c"
-					>
-				</File>
+                <File
+                    RelativePath=".\meta\ps3_past.c"
+                    >
+                </File>
+                <File
+                    RelativePath=".\meta\psf.c"
+                    >
+                </File>
 				<File
 					RelativePath=".\meta\sgxd.c"
 					>
@@ -1391,7 +1399,7 @@
                     >
                 </File>
 				<File
-					RelativePath=".\meta\psx_gms.c"
+					RelativePath=".\meta\seb.c"
 					>
 				</File>
 				<File
@@ -1399,7 +1407,7 @@
 					>
 				</File>
 				<File
-					RelativePath=".\meta\raw.c"
+					RelativePath=".\meta\raw_pcm.c"
 					>
 				</File>
                 <File
@@ -1582,10 +1590,14 @@
                     RelativePath=".\meta\ubi_bao.c"
                     >
                 </File>
-				<File
-					RelativePath=".\meta\ubi_ckd.c"
-					>
-				</File>
+                <File
+                    RelativePath=".\meta\ubi_ckd.c"
+                    >
+                </File>
+                <File
+                    RelativePath=".\meta\ubi_hx.c"
+                    >
+                </File>
                 <File
                     RelativePath=".\meta\ubi_lyn.c"
                     >
@@ -1727,15 +1739,15 @@
 					>
 				</File>
 				<File
-					RelativePath=".\meta\xbox_wavm.c"
+					RelativePath=".\meta\raw_wavm.c"
 					>
 				</File>
 				<File
-					RelativePath=".\meta\xbox_xmu.c"
+					RelativePath=".\meta\xmu.c"
 					>
 				</File>
 				<File
-					RelativePath=".\meta\xbox_xvas.c"
+					RelativePath=".\meta\xvas.c"
 					>
 				</File>
                 <File
@@ -1911,7 +1923,7 @@
                     >
                 </File>
                 <File
-                    RelativePath=".\coding\ffmpeg_decoder_utils_ea_schl.c"
+                    RelativePath=".\coding\ffmpeg_decoder_utils.c"
                     >
                 </File>
                 <File
@@ -2022,18 +2034,26 @@
                     RelativePath=".\coding\psv_decoder.c"
                     >
                 </File>
-				<File
-					RelativePath=".\coding\psx_decoder.c"
-					>
-				</File>
+                <File
+                    RelativePath=".\coding\psx_decoder.c"
+                    >
+                </File>
+                <File
+                    RelativePath=".\coding\ptadpcm_decoder.c"
+                    >
+                </File>
 				<File
 					RelativePath=".\coding\sassc_decoder.c"
 					>
 				</File>
-				<File
-					RelativePath=".\coding\sdx2_decoder.c"
-					>
-				</File>
+                <File
+                    RelativePath=".\coding\sdx2_decoder.c"
+                    >
+                </File>
+                <File
+                    RelativePath=".\coding\ubi_adpcm_decoder.c"
+                    >
+                </File>
 				<File
 					RelativePath=".\coding\ws_decoder.c"
 					>

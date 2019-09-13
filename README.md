@@ -134,6 +134,7 @@ them playable through vgmstream.
 - .aif to .laif or .aiffl or .aifcl (standard Mac AIF, Asobo AIF, Ogg)
 - .aiff/aifc to .aiffl/aifcl (standard Mac AIF)
 - .asf to .lasf (EA games, Argonaut ASF)
+- .bin to .lbin (various)
 - .flac to .lflac (standard FLAC)
 - .mp2 to .lmp2 (standard MP2)
 - .mp3 to .lmp3 (standard MP3)
@@ -191,7 +192,7 @@ left together.
 
 Similarly some formats split header and/or data in separate files (.sgh+sgd,
 .wav.str+.wav, (file)_L.dsp+(file)_R.dsp, etc). vgmstream will also detect
-and use those as needed and must be tegether, even if only one of the two
+and use those as needed and must be together, even if only one of the two
 will be used to play.
 
 .pos is a small file with 32 bit little endian values: loop start sample
@@ -202,8 +203,8 @@ have total samples after those.
 Certain formats have encrypted data, and need a key to decrypt. vgmstream
 will try to find the correct key from a list, but it can be provided by
 a companion file:
-- .adx: .adxkey (derived 6 byte key, in start/mult/add format)
-- .ahx: .ahxkey (derived 6 byte key, in start/mult/add format)
+- .adx: .adxkey (keystring, keycode, or derived 6 byte start/mult/add key)
+- .ahx: .ahxkey (derived 6 byte start/mult/add key)
 - .hca: .hcakey (8 byte decryption key, a 64-bit number)
   - May be followed by 2 byte AWB scramble key for newer HCA
 - .fsb: .fsbkey (decryption key, in hex)
@@ -247,7 +248,7 @@ recent versions (1.4.x) you can configure plugin priority.
 ### Channel issues
 Some games layer a huge number of channels, that are disabled or downmixed
 during gameplay. The player may be unable to play those files (for example
-foobar can only play up to 8 channels, and Winamp depends the your sound
+foobar can only play up to 8 channels, and Winamp depends on your sound
 card). For those files you can set the "downmix" option in vgmstream, that
 can reduce the number of channels to a playable amount. Note that this type
 of downmixing is very generic, not meant to be used when converting to other
@@ -308,7 +309,7 @@ the format defined.
 
 
 ## Supported codec types
-Quick list of codecs vgmstream supports, including many obscure ones that 
+Quick list of codecs vgmstream supports, including many obscure ones that
 are used in few games.
 
 - PCM 16-bit
@@ -322,7 +323,7 @@ are used in few games.
 - Nintendo AFC ADPCM
 - ITU-T G.721
 - CD-ROM XA ADPCM
-- Sony PSX ADPCM a.k.a VAG (standard, badflags, configurable)
+- Sony PSX ADPCM a.k.a VAG (standard, badflags, configurable, Pivotal)
 - Sony HEVAG
 - Electronic Arts EA-XA (stereo, mono, Maxis)
 - Electronic Arts EA-XAS (v0, v1)
@@ -339,11 +340,12 @@ are used in few games.
 - Paradigm MC3 ADPCM
 - FMOD FADPCM 4-bit ADPCM
 - Konami XMD 4-bit ADPCM
+- Platinum 4-bit ADPCM
 - Argonaut ASF 4-bit ADPCM
 - Ocean DSA 4-bit ADPCM
 - Circus XPCM ADPCM
-- OKI 4-bit ADPCM (16-bit output, PC-FX)
-- Ocean DSA 4-bit ADPCM
+- OKI 4-bit ADPCM (16-bit output, 4-shift, PC-FX)
+- Ubisoft 4/6-bit ADPCM
 - SDX2 2:1 Squareroot-Delta-Exact compression DPCM
 - CBD2 2:1 Cuberoot-Delta-Exact compression DPCM
 - Activision EXAKT SASSC DPCM

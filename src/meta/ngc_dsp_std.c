@@ -6,26 +6,25 @@
 /* If these variables are packed properly in the struct (one after another)
  * then this is actually how they are laid out in the file, albeit big-endian */
 struct dsp_header {
-    uint32_t sample_count;
-    uint32_t nibble_count;
-    uint32_t sample_rate;
-    uint16_t loop_flag;
-    uint16_t format;
-    uint32_t loop_start_offset;
-    uint32_t loop_end_offset;
-    uint32_t ca;
-    int16_t coef[16]; /* really 8x2 */
-    uint16_t gain;
-    uint16_t initial_ps;
-    int16_t initial_hist1;
-    int16_t initial_hist2;
-    uint16_t loop_ps;
-    int16_t loop_hist1;
-    int16_t loop_hist2;
-    int16_t channel_count; /* DSPADPCM.exe ~v2.7 extension */
-    int16_t block_size;
-    /* padding/reserved up to 0x60 */
-    /* DSPADPCM.exe from GC adds some extra data here (uninitialized MSVC memory?) */
+    uint32_t sample_count;      /* 0x00 */
+    uint32_t nibble_count;      /* 0x04 */
+    uint32_t sample_rate;       /* 0x08 */
+    uint16_t loop_flag;         /* 0x0c */
+    uint16_t format;            /* 0x0e */
+    uint32_t loop_start_offset; /* 0x10 */
+    uint32_t loop_end_offset;   /* 0x14 */
+    uint32_t ca;                /* 0x18 */
+    int16_t coef[16];           /* 0x1c (really 8x2) */
+    uint16_t gain;              /* 0x3c */
+    uint16_t initial_ps;        /* 0x3e */
+    int16_t initial_hist1;      /* 0x40 */
+    int16_t initial_hist2;      /* 0x42 */
+    uint16_t loop_ps;           /* 0x44 */
+    int16_t loop_hist1;         /* 0x46 */
+    int16_t loop_hist2;         /* 0x48 */
+    int16_t channel_count;      /* 0x4a (DSPADPCM.exe ~v2.7 extension) */
+    int16_t block_size;         /* 0x4c */
+    /* padding/reserved up to 0x60, DSPADPCM.exe from GC adds garbage here (uninitialized MSVC memory?) */
 };
 
 /* read the above struct; returns nonzero on failure */
@@ -79,6 +78,8 @@ typedef struct {
     size_t header_spacing;          /* distance between DSP header of other channels */
     off_t start_offset;             /* data start */
     size_t interleave;              /* distance between data of other channels */
+    size_t interleave_first;        /* same, in the first block */
+    size_t interleave_first_skip;   /* extra info */
     size_t interleave_last;         /* same, in the last block */
 
     meta_t meta_type;
@@ -208,6 +209,8 @@ static VGMSTREAM * init_vgmstream_dsp_common(STREAMFILE *streamFile, dsp_meta *d
     if (dspm->interleave == 0 || vgmstream->coding_type == coding_NGC_DSP_subint)
         vgmstream->layout_type = layout_none;
     vgmstream->interleave_block_size = dspm->interleave;
+    vgmstream->interleave_first_block_size = dspm->interleave_first;
+    vgmstream->interleave_first_skip = dspm->interleave_first_skip;
     vgmstream->interleave_last_block_size = dspm->interleave_last;
 
     {
@@ -687,33 +690,6 @@ VGMSTREAM * init_vgmstream_sadf(STREAMFILE *streamFile) {
 
 fail:
     close_vgmstream(vgmstream);
-    return NULL;
-}
-
-/* SWD - PSF chunks + interleaved dsps [Conflict: Desert Storm 1 & 2] */
-VGMSTREAM * init_vgmstream_ngc_swd(STREAMFILE *streamFile) {
-    dsp_meta dspm = {0};
-
-    /* checks */
-    if (!check_extensions(streamFile, "swd"))
-        goto fail;
-
-    //todo blocked layout when first chunk is 0x50534631 (count + table of 0x0c with offset/sizes)
-
-    if (read_32bitBE(0x00,streamFile) != 0x505346d1) /* PSF\0xd1 */
-        goto fail;
-
-    dspm.channel_count = 2;
-    dspm.max_channels = 2;
-
-    dspm.header_offset = 0x08;
-    dspm.header_spacing = 0x60;
-    dspm.start_offset = dspm.header_offset + 0x60 * dspm.channel_count;
-    dspm.interleave = 0x08;
-
-    dspm.meta_type = meta_NGC_SWD;
-    return init_vgmstream_dsp_common(streamFile, &dspm);
-fail:
     return NULL;
 }
 
@@ -1274,6 +1250,37 @@ VGMSTREAM * init_vgmstream_dsp_ds2(STREAMFILE *streamFile) {
     dspm.interleave = channel_offset - dspm.start_offset;
 
     dspm.meta_type = meta_DSP_DS2;
+    return init_vgmstream_dsp_common(streamFile, &dspm);
+fail:
+    return NULL;
+}
+
+/* .itl - Incinerator Studios interleaved dsp [Cars Race-o-rama (Wii), MX vs ATV Untamed (Wii)] */
+VGMSTREAM * init_vgmstream_dsp_itl(STREAMFILE *streamFile) {
+    dsp_meta dspm = {0};
+    size_t stream_size;
+
+    /* checks */
+    /* .itl: standard
+     * .dsp: default to catch a similar file, not sure which devs */
+    if (!check_extensions(streamFile, "itl,dsp"))
+        goto fail;
+
+    stream_size = get_streamfile_size(streamFile);
+    dspm.channel_count = 2;
+    dspm.max_channels = 2;
+
+    dspm.start_offset = 0x60;
+    dspm.interleave = 0x10000;
+    dspm.interleave_first_skip = dspm.start_offset;
+    dspm.interleave_first = dspm.interleave - dspm.interleave_first_skip;
+    dspm.interleave_last = (stream_size / dspm.channel_count) % dspm.interleave;
+    dspm.header_offset = 0x00;
+    dspm.header_spacing = dspm.interleave;
+
+    //todo some files end in half a frame and may click at the very end
+    //todo when .dsp should refer to Ultimate Board Collection (Wii), not sure about dev
+    dspm.meta_type = meta_DSP_ITL_i;
     return init_vgmstream_dsp_common(streamFile, &dspm);
 fail:
     return NULL;

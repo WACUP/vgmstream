@@ -34,17 +34,12 @@
 #include <sdk/nu/AutoWide.h>
 #include <sdk/nu/AutoChar.h>
 #include <sdk/nu/AutoCharFn.h>
-#include <sdk/nu/ServiceBuilder.h>
 
 #include <api/service/api_service.h>
-extern api_service *serviceManager;
-#define WASABI_API_SVC serviceManager
 
 #include <api/service/waservicefactory.h>
 
 #include <sdk/Agave/Config/api_config.h>
-extern api_config *configApi;
-#define AGAVE_API_CONFIG configApi
 
 #include <sdk/Agave/Language/api_language.h>
 
@@ -58,10 +53,10 @@ extern api_config *configApi;
 #endif
 
 #ifndef VERSIONW
-#define VERSIONW L"2.1.2395"
+#define VERSIONW L"2.1.2466"
 #endif
 
-#define LIBVGMSTREAM_BUILD "1050-2395-g056ee4fb-wacup"
+#define LIBVGMSTREAM_BUILD "1050-2466-ga349c26b-wacup"
 #define APP_NAME "vgmstream plugin"
 #define PLUGIN_DESCRIPTION "vgmstream Decoder v" VERSION
 #define PLUGIN_DESCRIPTIONW L"vgmstream Decoder v" VERSIONW
@@ -77,10 +72,9 @@ DWORD WINAPI __stdcall decode(void *arg);
 #define EXTENSION_LIST_SIZE   (0x2000 * 8)
 #define EXT_BUFFER_SIZE 200
 /* fixed list to simplify but could also malloc/free on init/close */
-char working_extension_list[EXTENSION_LIST_SIZE] = {0};
+wchar_t working_extension_list[EXTENSION_LIST_SIZE] = {0};
 
 api_language* WASABI_API_LNG = NULL;
-api_config *AGAVE_API_CONFIG = NULL;
 
 wchar_t plugindir[MAX_PATH] = {0};
 
@@ -689,16 +683,16 @@ static void build_extension_list() {
 	for (i = 0; i < ext_list_len; i++) {
 		if (*working_extension_list)
 		{
-			strncat(working_extension_list, ";", EXTENSION_LIST_SIZE);
+			wcsncat(working_extension_list, L";", EXTENSION_LIST_SIZE);
     }
-		strncat(working_extension_list, ext_list[i], EXTENSION_LIST_SIZE);
+		wcsncat(working_extension_list, AutoWide(ext_list[i]), EXTENSION_LIST_SIZE);
 	}
-	char *list = working_extension_list + strlen(working_extension_list) + 1;
+	wchar_t *list = working_extension_list + wcslen(working_extension_list) + 1;
 	if (list)
 	{
-		strcat(list, "Video Game Music File\0");
+		wcscat(list, L"Video Game Music File\0");
 	}
-	//MessageBoxA(0, working_extension_list, 0, 0);
+	//MessageBox(0, working_extension_list, 0, 0);
 }
 
 /* unicode utils */
@@ -753,12 +747,24 @@ void about(HWND hwndParent)
 					L"vgmstream Decoder");
 }
 
+/* loading optimisation to reduce initial blocking 
+** andsave building the list if there's no need...
+*/
+void __cdecl GetFileExtensions(void)
+{
+	static bool loaded_extensions;
+	if (!loaded_extensions)
+	{
+		/* dynamically make a list of supported extensions */
+		build_extension_list();
+		plugin.FileExtensions = (char *)working_extension_list;
+		loaded_extensions = true;
+	}
+}
+
 /* called at program init */
 int init() {
-
-	// load all of the required wasabi services from the winamp client
-	ServiceBuild(plugin.service, AGAVE_API_CONFIG, AgaveConfigGUID);
-	ServiceBuild(plugin.service, WASABI_API_LNG, languageApiGUID);
+	WASABI_API_LNG = plugin.language;
 
 	// need to have this initialised before we try to do anything with localisation features
 	/*WASABI_API_START_LANG(plugin.hDllInstance, InWvLangGuid);
@@ -766,15 +772,14 @@ int init() {
 	StringCchPrintf(pluginTitle, ARRAYSIZE(pluginTitle), WASABI_API_LNGSTRINGW(IDS_PLUGIN_NAME), PLUGIN_VERSION);
 	plugin.description = (char*)pluginTitle;*/
 
-    /* dynamically make a list of supported extensions */
-    build_extension_list();
+	// TODO localise
+	plugin.description = (char*)PLUGIN_DESCRIPTIONW;
+
 	return IN_INIT_SUCCESS;
 }
 
 /* called at program quit */
 void quit() {
-    ServiceRelease(plugin.service, AGAVE_API_CONFIG, AgaveConfigGUID);
-    ServiceRelease(plugin.service, WASABI_API_LNG, languageApiGUID);
 }
 
 /* called before extension checks, to allow detection of mms://, etc */
@@ -878,7 +883,7 @@ int play(const in_char *fn) {
 										NULL);  /* don't keep track of the thread id */
 
     if (decode_thread_handle == 0 ||
-        SetThreadPriority(decode_thread_handle, AGAVE_API_CONFIG->GetInt(playbackConfigGroupGUID, L"priority", THREAD_PRIORITY_HIGHEST)) == 0)
+        SetThreadPriority(decode_thread_handle, plugin.config->GetInt(playbackConfigGroupGUID, L"priority", THREAD_PRIORITY_HIGHEST)) == 0)
 	{
         close_vgmstream(vgmstream);
         vgmstream = NULL;
@@ -1161,11 +1166,11 @@ void config(HWND hwndParent) {
 
 /* main plugin def */
 In_Module plugin = {
-	IN_VER_RET,
+	IN_VER_WACUP,
     (char*)PLUGIN_DESCRIPTIONW,
     0,  /* hMainWindow (filled in by Winamp) */
     0,  /* hDllInstance (filled in by Winamp) */
-    working_extension_list,
+    NULL,
     1, /* is_seekable flag  */
     1, /* UsesOutputPlug flag */
     config,
@@ -1189,7 +1194,9 @@ In_Module plugin = {
     0,0, /* dsp stuff */
     NULL,
     NULL, /* SetInfo */
-    0 /* outMod */
+    0, /* outMod */
+	0, /* api_service */
+	GetFileExtensions /* loading optimisation :) */
 };
 
 extern "C" __declspec(dllexport) In_Module * winampGetInModule2() {

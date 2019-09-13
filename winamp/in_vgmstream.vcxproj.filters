@@ -39,5 +39,8 @@
     <Library Include="..\..\loader\hook\Release\winamp.lib">
       <Filter>External Libraries</Filter>
     </Library>
+    <Library Include="..\..\mpg123\build\mpg123\Release\mpg123.lib">
+      <Filter>External Libraries</Filter>
+    </Library>
   </ItemGroup>
 </Project>
