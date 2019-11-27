@@ -25,7 +25,7 @@ VGMSTREAM * init_vgmstream_ffmpeg_offset(STREAMFILE *streamFile, uint64_t start,
     //    goto fail;
 
     /* don't try to open headers and other mini files */
-    if (get_streamfile_size(streamFile) <= 0x100)
+    if (get_streamfile_size(streamFile) <= 0x1000)
         goto fail;
 
 
@@ -59,6 +59,12 @@ VGMSTREAM * init_vgmstream_ffmpeg_offset(STREAMFILE *streamFile, uint64_t start,
     /* hack for MP3 files (will return 0 samples if not an actual file) */
     if (!num_samples && check_extensions(streamFile, "mp3,lmp3")) {
         num_samples = mpeg_get_samples(streamFile, 0x00, get_streamfile_size(streamFile));
+    }
+
+    /* hack for MPC, that seeks/resets incorrectly due to seek table shenanigans */
+    if (read_32bitBE(0x00, streamFile) == 0x4D502B07 || /* "MP+\7" (Musepack V7) */
+        read_32bitBE(0x00, streamFile) == 0x4D50434B) { /* "MPCK" (Musepack V8) */
+        ffmpeg_set_force_seek(data);
     }
 
     /* default but often inaccurate when calculated using bitrate (wrong for VBR) */

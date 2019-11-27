@@ -56,7 +56,7 @@
 #define VERSIONW L"2.1.2466"
 #endif
 
-#define LIBVGMSTREAM_BUILD "1050-2466-ga349c26b-wacup"
+#define LIBVGMSTREAM_BUILD "1050-2655-g2ac2c0ce-wacup"
 #define APP_NAME "vgmstream plugin"
 #define PLUGIN_DESCRIPTION "vgmstream Decoder v" VERSION
 #define PLUGIN_DESCRIPTIONW L"vgmstream Decoder v" VERSIONW
@@ -684,7 +684,7 @@ static void build_extension_list() {
 		if (*working_extension_list)
 		{
 			wcsncat(working_extension_list, L";", EXTENSION_LIST_SIZE);
-    }
+		}
 		wcsncat(working_extension_list, AutoWide(ext_list[i]), EXTENSION_LIST_SIZE);
 	}
 	wchar_t *list = working_extension_list + wcslen(working_extension_list) + 1;
@@ -775,7 +775,7 @@ int init() {
 	// TODO localise
 	plugin.description = (char*)PLUGIN_DESCRIPTIONW;
 
-	return IN_INIT_SUCCESS;
+ 	return IN_INIT_SUCCESS;
 }
 
 /* called at program quit */
@@ -964,7 +964,7 @@ int infoDlg(const in_char *fn, HWND hwnd) {
 
     if (!fn || !*fn) {
         /* no filename = current playing file */
-        if (!vgmstream)
+		if (!vgmstream)
 		{
 			return INFOBOX_UNCHANGED;
 		}
@@ -982,7 +982,7 @@ int infoDlg(const in_char *fn, HWND hwnd) {
         parse_fn_int(fn, L"$s", &stream_index);
 
         infostream = init_vgmstream_winamp(filename, stream_index);
-        if (!infostream)
+		if (!infostream)
 		{
 			return INFOBOX_UNCHANGED;
 		}
@@ -1001,7 +1001,7 @@ int infoDlg(const in_char *fn, HWND hwnd) {
 }
 
 /* retrieve title (playlist name) and time on the current or other file in the playlist */
-void getfileinfo(const in_char *fn, in_char *title, int *length_in_ms) {
+void getfileinfo(const in_char *fn, in_char *title, int *length_in_ms){
 
     if (!fn || !*fn) {
         /* no filename = current playing file */
@@ -1167,7 +1167,7 @@ void config(HWND hwndParent) {
 /* main plugin def */
 In_Module plugin = {
 	IN_VER_WACUP,
-    (char*)PLUGIN_DESCRIPTIONW,
+	(char*)PLUGIN_DESCRIPTIONW,
     0,  /* hMainWindow (filled in by Winamp) */
     0,  /* hDllInstance (filled in by Winamp) */
     NULL,
@@ -1341,7 +1341,7 @@ static int winampGetExtendedFileInfo_common(in_char *filename, char *metadata, c
 		if (strcasecmp(metadata, "length") == 0) {
 			goto get_length;
 		}
-        goto fail;
+		goto fail;
 	}
 
     /* always called (value in ms), must return ok so other tags get called */
@@ -1355,7 +1355,7 @@ get_length:
 			if (!infostream)
 			{
 				free(fn);
-    }
+			}
 			else
 			{
 				_itoa_s(get_vgmstream_play_samples(loop_count, fade_seconds, fade_delay_seconds, infostream) *
@@ -1388,7 +1388,7 @@ fail:
     return 0;
 }
 
-extern "C" __declspec (dllexport) int winampGetExtendedFileInfoW(wchar_t *filename, char *metadata, wchar_t *ret, int retlen)
+extern "C" __declspec(dllexport) int winampGetExtendedFileInfoW(wchar_t *filename, char *metadata, wchar_t *ret, int retlen)
 {
 	int retval = 0;
 
@@ -1528,7 +1528,7 @@ extern "C" __declspec(dllexport) intptr_t winampGetExtendedRead_openW(const wcha
 	read_config();
 
 	VGMSTREAM *ext_vgmstream = NULL;
-	in_char filename[PATH_LIMIT] = {0};
+	in_char filename[PATH_LIMIT] = { 0 };
 	int stream_index = 0;
 
 	/* check for info encoded in the filename */
@@ -1583,8 +1583,8 @@ extern "C" __declspec(dllexport) size_t winampGetExtendedRead_getData(intptr_t h
 
 	VGMSTREAM *ext_vgmstream = (VGMSTREAM *)handle;
 	if (!ext_vgmstream) {
-	return 0;
-}
+		return 0;
+	}
 
 	while (copied + max_buffer_samples * ext_vgmstream->channels * 2 < len && !done) {
 		int samples_to_do;
@@ -1615,7 +1615,7 @@ extern "C" __declspec(dllexport) size_t winampGetExtendedRead_getData(intptr_t h
 				samples_to_do = ext_seek_needed_samples - ext_decode_pos_samples;
 				if (samples_to_do > max_buffer_samples) {
 					samples_to_do = max_buffer_samples;
-			}
+				}
 			}
 			else {
 				ext_seek_needed_samples = -1;
@@ -1663,6 +1663,7 @@ extern "C" __declspec(dllexport) size_t winampGetExtendedRead_getData(intptr_t h
 			break;
 		}
 	}
+
 	return copied;
 }
 

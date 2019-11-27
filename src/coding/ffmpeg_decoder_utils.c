@@ -66,11 +66,12 @@ ffmpeg_codec_data * init_ffmpeg_atrac3_raw(STREAMFILE *sf, off_t offset, size_t 
 
     /* invert ATRAC3: waveform is inverted vs official tools (not noticeable but for accuracy) */
     if (is_at3) {
-        ffmpeg_data->invert_audio_set = 1;
+        ffmpeg_data->invert_floats_set = 1;
     }
 
     return ffmpeg_data;
 fail:
+    free_ffmpeg(ffmpeg_data);
     return NULL;
 }
 
@@ -132,7 +133,8 @@ ffmpeg_codec_data * init_ffmpeg_atrac3_riff(STREAMFILE *sf, off_t offset, int* o
     /* implicit skip: official tools skip this even with encoder delay forced to 0. Maybe FFmpeg decodes late,
      * but when forcing tools to decode all frame samples it always ends a bit before last frame, so maybe it's
      * really an internal skip, since encoder adds extra frames so fact num_samples + encoder delay + implicit skip
-     * never goes past file. Same for all bitrate/channels, not added to loops. */
+     * never goes past file. Same for all bitrate/channels, not added to loops. This is probably "decoder delay"
+     * also seen in codecs like MP3 */
     if (is_at3) {
         implicit_skip = 69;
     }
@@ -158,7 +160,7 @@ ffmpeg_codec_data * init_ffmpeg_atrac3_riff(STREAMFILE *sf, off_t offset, int* o
 
     /* invert ATRAC3: waveform is inverted vs official tools (not noticeable but for accuracy) */
     if (is_at3) {
-        ffmpeg_data->invert_audio_set = 1;
+        ffmpeg_data->invert_floats_set = 1;
     }
 
     /* multichannel fix: LFE channel should be reordered on decode (ATRAC3Plus only, only 1/2/6/8ch exist):
@@ -181,9 +183,8 @@ ffmpeg_codec_data * init_ffmpeg_atrac3_riff(STREAMFILE *sf, off_t offset, int* o
 
     return ffmpeg_data;
 fail:
+    free_ffmpeg(ffmpeg_data);
     return NULL;
 }
-
-
 
 #endif

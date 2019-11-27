@@ -535,16 +535,110 @@ fail:
     return NULL;
 }
 
-/* EA MPF/MUS combo - used in older 7th gen games for storing music */
+/* open map/mpf+mus pairs that aren't exact pairs, since EA's games can load any combo */
+static STREAMFILE *open_mapfile_pair(STREAMFILE *streamFile, int track, int num_tracks) {
+    static const char *const mapfile_pairs[][2] = {
+        /* standard cases, replace map part with mus part (from the end to preserve prefixes) */
+        {"FreSkate.mpf",    "track.mus,ram.mus"}, /* Skate It */
+        {"nsf_sing.mpf",    "track_main.mus"}, /* Need for Speed: Nitro */
+        {"nsf_wii.mpf",     "Track.mus"}, /* Need for Speed: Nitro */
+        {"ssx_fe.mpf",      "stream_1.mus,stream_2.mus"}, /* SSX 2012 */
+        {"ssxdd.mpf",       "main_trk.mus," /* SSX 2012 */
+                            "trick_alaska0.mus,"
+                            "trick_rockies0.mus,"
+                            "trick_pata0.mus,"
+                            "trick_ant0.mus,"
+                            "trick_killi0.mus,"
+                            "trick_cyb0.mus,"
+                            "trick_hima0.mus,"
+                            "trick_nz0.mus,"
+                            "trick_alps0.mus,"
+                            "trick_lhotse0.mus"}
+    };
+    STREAMFILE *musFile = NULL;
+    char file_name[PATH_LIMIT];
+    int pair_count = (sizeof(mapfile_pairs) / sizeof(mapfile_pairs[0]));
+    int i, j;
+    size_t file_len, map_len;
+
+    /* if loading the first track, try opening MUS with the same name first (most common scenario) */
+    if (track == 0) {
+        musFile = open_streamfile_by_ext(streamFile, "mus");
+        if (musFile) return musFile;
+    }
+
+    get_streamfile_filename(streamFile, file_name, PATH_LIMIT);
+    file_len = strlen(file_name);
+
+    for (i = 0; i < pair_count; i++) {
+        const char *map_name = mapfile_pairs[i][0];
+        const char *mus_name = mapfile_pairs[i][1];
+        char buf[PATH_LIMIT] = { 0 };
+        char *pch;
+        int use_mask = 0;
+        map_len = strlen(map_name);
+
+        /* replace map_name with expected mus_name */
+        if (file_len < map_len)
+            continue;
+
+        if (map_name[0] == '*') {
+            use_mask = 1;
+            map_name++;
+            map_len--;
+
+            if (strncmp(file_name + (file_len - map_len), map_name, map_len) != 0)
+                continue;
+        } else {
+            if (strcmp(file_name, map_name) != 0)
+                continue;
+        }
+
+        strncpy(buf, mus_name, PATH_LIMIT - 1);
+        pch = strtok(buf, ","); //TODO: not thread safe in std C
+        for (j = 0; j < track && pch; j++) {
+            pch = strtok(NULL, ",");
+        }
+        if (!pch) continue; /* invalid track */
+
+        if (use_mask) {
+            file_name[file_len - map_len] = '\0';
+            strncat(file_name, pch + 1, PATH_LIMIT - 1);
+        } else {
+            strncpy(file_name, pch, PATH_LIMIT - 1);
+        }
+
+        musFile = open_streamfile_by_filename(streamFile, file_name);
+        if (musFile) return musFile;
+
+        get_streamfile_filename(streamFile, file_name, PATH_LIMIT); /* reset for next loop */
+    }
+
+    /* hack when when multiple maps point to the same mus, uses name before "+"
+     * ex. ZZZTR00A.TRJ+ZTR00PGR.MAP or ZZZTR00A.TRJ+ZTR00R0A.MAP both point to ZZZTR00A.TRJ */
+    {
+        char *mod_name = strchr(file_name, '+');
+        if (mod_name) {
+            mod_name[0] = '\0';
+            musFile = open_streamfile_by_filename(streamFile, file_name);
+            if (musFile) return musFile;
+        }
+    }
+
+    VGM_LOG("No MPF/MUS pair specified for %s.\n", file_name);
+    return NULL;
+}
+
+/* EA MPF/MUS combo - used in older 7th gen games for storing interactive music */
 VGMSTREAM * init_vgmstream_ea_mpf_mus_eaac(STREAMFILE *streamFile) {
-    uint32_t num_sounds;
+    uint32_t num_tracks, track_start, track_hash, mus_sounds, mus_stream = 0;
     uint8_t version, sub_version, block_id;
-    off_t table_offset, entry_offset, snr_offset, sns_offset;
-    /* size_t snr_size sns_size; */
+    off_t tracks_table, samples_table, eof_offset, table_offset, entry_offset, snr_offset, sns_offset;
     int32_t(*read_32bit)(off_t, STREAMFILE*);
     STREAMFILE *musFile = NULL;
     VGMSTREAM *vgmstream = NULL;
-    int target_stream = streamFile->stream_index;
+    int i;
+    int target_stream = streamFile->stream_index, total_streams, is_ram = 0;
 
     /* check extension */
     if (!check_extensions(streamFile, "mpf"))
@@ -553,47 +647,110 @@ VGMSTREAM * init_vgmstream_ea_mpf_mus_eaac(STREAMFILE *streamFile) {
     /* detect endianness */
     if (read_32bitBE(0x00, streamFile) == 0x50464478) { /* "PFDx" */
         read_32bit = read_32bitBE;
-    } else if (read_32bitBE(0x00, streamFile) == 0x78444650) { /* "xDFP" */
+    } else if (read_32bitLE(0x00, streamFile) == 0x50464478) { /* "xDFP" */
         read_32bit = read_32bitLE;
     } else {
         goto fail;
     }
 
-    musFile = open_streamfile_by_ext(streamFile, "mus");
-    if (!musFile) goto fail;
-
-    /* MPF format is unchanged but we don't really care about its contents since
-     * MUS conveniently contains sound offset table */
-
     version = read_8bit(0x04, streamFile);
     sub_version = read_8bit(0x05, streamFile);
-    if (version != 0x05 || sub_version != 0x03) goto fail;
+    if (version != 5 || sub_version < 2 || sub_version > 3) goto fail;
 
-    /* number of files is always little endian */
-    num_sounds = read_32bitLE(0x04, musFile);
-    table_offset = 0x28;
+    num_tracks = read_8bit(0x0d, streamFile);
+
+    tracks_table = read_32bit(0x2c, streamFile);
+    samples_table = read_32bit(0x34, streamFile);
+    eof_offset = read_32bit(0x38, streamFile);
+    total_streams = (eof_offset - samples_table) / 0x08;
 
     if (target_stream == 0) target_stream = 1;
-    if (target_stream < 0 || num_sounds == 0 || target_stream > num_sounds)
+    if (target_stream < 0 || total_streams == 0 || target_stream > total_streams)
         goto fail;
 
-    /*
-     * 0x00: hash?
-     * 0x04: index
-     * 0x06: zero
-     * 0x08: SNR offset
-     * 0x0c: SNS offset
-     * 0x10: SNR size
-     * 0x14: SNS size
-     * 0x18: zero
-     */
-    entry_offset = table_offset + (target_stream - 1) * 0x1c;
-    snr_offset = read_32bit(entry_offset + 0x08, musFile) * 0x10;
-    sns_offset = read_32bit(entry_offset + 0x0c, musFile) * 0x80;
-    /*
-    snr_size = read_32bit(entry_offset + 0x10, musFile);
-    sns_size = read_32bit(entry_offset + 0x14, musFile);
-    */
+    for (i = num_tracks - 1; i >= 0; i--) {
+        entry_offset = read_32bit(tracks_table + i * 0x04, streamFile) * 0x04;
+        track_start = read_32bit(entry_offset + 0x00, streamFile);
+
+        if (track_start <= target_stream - 1) {
+            track_hash = read_32bitBE(entry_offset + 0x08, streamFile);
+            is_ram = (track_hash == 0xF1F1F1F1);
+
+            /* checks to distinguish it from older versions */
+            if (is_ram) {
+                if (read_32bitBE(entry_offset + 0x0c, streamFile) != 0x00)
+                    goto fail;
+
+                track_hash = read_32bitBE(entry_offset + 0x14, streamFile);
+                if (track_hash == 0xF1F1F1F1)
+                    continue; /* empty track */
+            } else {
+                if (read_32bitBE(entry_offset + 0x0c, streamFile) == 0x00)
+                    goto fail;
+            }
+
+            mus_stream = target_stream - 1 - track_start;
+            break;
+        }
+    }
+
+    /* open MUS file that matches this track */
+    musFile = open_mapfile_pair(streamFile, i, num_tracks);
+    if (!musFile)
+        goto fail;
+
+    if (read_32bitBE(0x00, musFile) != track_hash)
+        goto fail;
+
+    /* sample offsets table is still there but it just holds SNS offsets, it's of little use to us */
+    /* MUS file has a header, however */
+    if (sub_version == 2) {
+        if (read_32bit(0x04, musFile) != 0x00)
+            goto fail;
+
+        /*
+         * 0x00: flags? index?
+         * 0x04: SNR offset
+         * 0x08: SNS offset (contains garbage for RAM sounds)
+         */
+        table_offset = 0x08;
+        entry_offset = table_offset + mus_stream * 0x0c;
+        snr_offset = read_32bit(entry_offset + 0x04, musFile);
+
+        if (is_ram) {
+            sns_offset = snr_offset + get_snr_size(musFile, snr_offset);
+        } else {
+            sns_offset = read_32bit(entry_offset + 0x08, musFile);
+        }
+    } else if (sub_version == 3) {
+        /* number of files is always little endian */
+        mus_sounds = read_32bitLE(0x04, musFile);
+        if (mus_stream >= mus_sounds)
+            goto fail;
+
+        if (is_ram) {
+            /* not seen so far */
+            VGM_LOG("Found RAM SNR in MPF v5.3.\n");
+            goto fail;
+        }
+
+        /*
+         * 0x00: hash?
+         * 0x04: index
+         * 0x06: zero
+         * 0x08: SNR offset
+         * 0x0c: SNS offset
+         * 0x10: SNR size
+         * 0x14: SNS size
+         * 0x18: zero
+         */
+        table_offset = 0x28;
+        entry_offset = table_offset + mus_stream * 0x1c;
+        snr_offset = read_32bit(entry_offset + 0x08, musFile) * 0x10;
+        sns_offset = read_32bit(entry_offset + 0x0c, musFile) * 0x80;
+    } else {
+        goto fail;
+    }
 
     block_id = read_8bit(sns_offset, musFile);
     if (block_id != EAAC_BLOCKID0_DATA && block_id != EAAC_BLOCKID0_END)
@@ -603,7 +760,8 @@ VGMSTREAM * init_vgmstream_ea_mpf_mus_eaac(STREAMFILE *streamFile) {
     if (!vgmstream)
         goto fail;
 
-    vgmstream->num_streams = num_sounds;
+    vgmstream->num_streams = total_streams;
+    get_streamfile_filename(musFile, vgmstream->stream_name, STREAM_NAME_SIZE);
     close_streamfile(musFile);
     return vgmstream;
 
@@ -855,8 +1013,8 @@ typedef struct {
     off_t loop_offset;
 } eaac_header;
 
-static segmented_layout_data* build_segmented_eaaudiocore_looping(STREAMFILE *streamData, eaac_header *eaac);
-static layered_layout_data* build_layered_eaaudiocore_eaxma(STREAMFILE *streamFile, eaac_header *eaac);
+static segmented_layout_data* build_segmented_eaaudiocore_looping(STREAMFILE *sf_data, eaac_header *eaac);
+static layered_layout_data* build_layered_eaaudiocore(STREAMFILE *streamFile, eaac_header *eaac);
 static size_t calculate_eaac_size(VGMSTREAM *vgmstream, STREAMFILE *streamFile, eaac_header *eaac, off_t start_offset);
 
 /* EA newest header from RwAudioCore (RenderWare?) / EAAudioCore library (still generated by sx.exe).
@@ -992,7 +1150,7 @@ static VGMSTREAM * init_vgmstream_eaaudiocore_header(STREAMFILE * streamHead, ST
                 vgmstream->layout_type = layout_segmented;
             }
             else {
-                vgmstream->layout_data = build_layered_eaaudiocore_eaxma(streamData, &eaac);
+                vgmstream->layout_data = build_layered_eaaudiocore(streamData, &eaac);
                 if (!vgmstream->layout_data) goto fail;
                 vgmstream->coding_type = coding_FFmpeg;
                 vgmstream->layout_type = layout_layered;
@@ -1105,21 +1263,10 @@ static VGMSTREAM * init_vgmstream_eaaudiocore_header(STREAMFILE * streamHead, ST
 
 #ifdef VGM_USE_FFMPEG
         case EAAC_CODEC_EAOPUS: { /* EAOpus (unknown FourCC) [FIFA 17 (PC), FIFA 19 (Switch)]*/
-            int skip = 0;
-            size_t data_size;
-
-            /* We'll remove EA blocks and pass raw data to FFmpeg Opus decoder */
-
-            temp_streamFile = setup_eaac_streamfile(streamData, eaac.version, eaac.codec, eaac.streamed,0,0, eaac.stream_offset);
-            if (!temp_streamFile) goto fail;
-
-            skip = ea_opus_get_encoder_delay(0x00, temp_streamFile);
-            data_size = get_streamfile_size(temp_streamFile);
-
-            vgmstream->codec_data = init_ffmpeg_ea_opus(temp_streamFile, 0x00,data_size, vgmstream->channels, skip, vgmstream->sample_rate);
-            if (!vgmstream->codec_data) goto fail;
+            vgmstream->layout_data = build_layered_eaaudiocore(streamData, &eaac);
+            if (!vgmstream->layout_data) goto fail;
             vgmstream->coding_type = coding_FFmpeg;
-            vgmstream->layout_type = layout_none;
+            vgmstream->layout_type = layout_layered;
             break;
         }
 #endif
@@ -1203,9 +1350,9 @@ static size_t calculate_eaac_size(VGMSTREAM *vgmstream, STREAMFILE *streamFile, 
  * We use the segmented layout, since the eaac_streamfile doesn't handle padding,
  * and the segments seem fully separate (so even skipping would probably decode wrong). */
 // todo reorganize code for more standard init
-static segmented_layout_data* build_segmented_eaaudiocore_looping(STREAMFILE *streamData, eaac_header *eaac) {
+static segmented_layout_data* build_segmented_eaaudiocore_looping(STREAMFILE *sf_data, eaac_header *eaac) {
     segmented_layout_data *data = NULL;
-    STREAMFILE* temp_streamFile = NULL;
+    STREAMFILE* temp_sf = NULL;
     off_t offsets[2] = { eaac->stream_offset, eaac->loop_offset };
     off_t start_offset;
     int num_samples[2] = { eaac->loop_start, eaac->num_samples - eaac->loop_start};
@@ -1235,7 +1382,7 @@ static segmented_layout_data* build_segmented_eaaudiocore_looping(STREAMFILE *st
             start_offset = 0x00; /* must point to the custom streamfile's beginning */
 
             /* layers inside segments, how trippy */
-            data->segments[i]->layout_data = build_layered_eaaudiocore_eaxma(streamData, &temp_eaac);
+            data->segments[i]->layout_data = build_layered_eaaudiocore(sf_data, &temp_eaac);
             if (!data->segments[i]->layout_data) goto fail;
             data->segments[i]->coding_type = coding_FFmpeg;
             data->segments[i]->layout_type = layout_layered;
@@ -1260,10 +1407,10 @@ static segmented_layout_data* build_segmented_eaaudiocore_looping(STREAMFILE *st
 
                 start_offset = 0x00; /* must point to the custom streamfile's beginning */
 
-                temp_streamFile = setup_eaac_streamfile(streamData, eaac->version,eaac->codec,eaac->streamed,0,0, offsets[i]);
-                if (!temp_streamFile) goto fail;
+                temp_sf = setup_eaac_streamfile(sf_data, eaac->version,eaac->codec,eaac->streamed,0,0, offsets[i]);
+                if (!temp_sf) goto fail;
 
-                data->segments[i]->codec_data = init_mpeg_custom(temp_streamFile, 0x00, &data->segments[i]->coding_type, eaac->channels, type, &cfg);
+                data->segments[i]->codec_data = init_mpeg_custom(temp_sf, 0x00, &data->segments[i]->coding_type, eaac->channels, type, &cfg);
                 if (!data->segments[i]->codec_data) goto fail;
                 data->segments[i]->layout_type = layout_none;
                 break;
@@ -1273,14 +1420,14 @@ static segmented_layout_data* build_segmented_eaaudiocore_looping(STREAMFILE *st
                 goto fail;
         }
 
-        if (!vgmstream_open_stream(data->segments[i],temp_streamFile == NULL ? streamData : temp_streamFile, start_offset))
+        if (!vgmstream_open_stream(data->segments[i],temp_sf == NULL ? sf_data : temp_sf, start_offset))
             goto fail;
 
-        close_streamfile(temp_streamFile);
-        temp_streamFile = NULL;
+        close_streamfile(temp_sf);
+        temp_sf = NULL;
 
         //todo temp_streamFile doesn't contain EAXMA's streamfile
-        data->segments[i]->stream_size = calculate_eaac_size(data->segments[i], temp_streamFile, eaac, start_offset);
+        data->segments[i]->stream_size = calculate_eaac_size(data->segments[i], temp_sf, eaac, start_offset);
     }
 
     if (!setup_layout_segmented(data))
@@ -1288,14 +1435,14 @@ static segmented_layout_data* build_segmented_eaaudiocore_looping(STREAMFILE *st
     return data;
 
 fail:
-    close_streamfile(temp_streamFile);
+    close_streamfile(temp_sf);
     free_layout_segmented(data);
     return NULL;
 }
 
-static layered_layout_data* build_layered_eaaudiocore_eaxma(STREAMFILE *streamData, eaac_header *eaac) {
+static layered_layout_data* build_layered_eaaudiocore(STREAMFILE *sf_data, eaac_header *eaac) {
     layered_layout_data* data = NULL;
-    STREAMFILE* temp_streamFile = NULL;
+    STREAMFILE* temp_sf = NULL;
     int i, layers = (eaac->channels+1) / 2;
 
 
@@ -1303,9 +1450,7 @@ static layered_layout_data* build_layered_eaaudiocore_eaxma(STREAMFILE *streamDa
     data = init_layout_layered(layers);
     if (!data) goto fail;
 
-    /* open each layer subfile (1/2ch streams: 2ch+2ch..+1ch or 2ch+2ch..+2ch).
-     * EA-XMA uses completely separate 1/2ch streams, unlike standard XMA that interleaves 1/2ch streams
-     * with a skip counter to reinterleave (so EA-XMA streams don't have skips set) */
+    /* open each layer subfile (1/2ch streams: 2ch+2ch..+1ch or 2ch+2ch..+2ch). */
     for (i = 0; i < layers; i++) {
         int layer_channels = (i+1 == layers && eaac->channels % 2 == 1) ? 1 : 2; /* last layer can be 1/2ch */
 
@@ -1319,44 +1464,71 @@ static layered_layout_data* build_layered_eaaudiocore_eaxma(STREAMFILE *streamDa
         data->layers[i]->loop_end_sample = eaac->loop_end;
 
 #ifdef VGM_USE_FFMPEG
-        {
-            uint8_t buf[0x100];
-            int bytes, block_size, block_count;
-            size_t stream_size;
+        switch(eaac->codec) {
+            /* EA-XMA uses completely separate 1/2ch streams, unlike standard XMA that interleaves 1/2ch
+             * streams with a skip counter to reinterleave (so EA-XMA streams don't have skips set) */
+            case EAAC_CODEC_EAXMA: {
+                uint8_t buf[0x100];
+                int bytes, block_size, block_count;
+                size_t stream_size;
 
-            temp_streamFile = setup_eaac_streamfile(streamData, eaac->version, eaac->codec, eaac->streamed,i,layers, eaac->stream_offset);
-            if (!temp_streamFile) goto fail;
+                temp_sf = setup_eaac_streamfile(sf_data, eaac->version, eaac->codec, eaac->streamed,i,layers, eaac->stream_offset);
+                if (!temp_sf) goto fail;
 
-            stream_size = get_streamfile_size(temp_streamFile);
-            block_size = 0x10000; /* unused */
-            block_count = stream_size / block_size + (stream_size % block_size ? 1 : 0);
+                stream_size = get_streamfile_size(temp_sf);
+                block_size = 0x10000; /* unused */
+                block_count = stream_size / block_size + (stream_size % block_size ? 1 : 0);
 
-            bytes = ffmpeg_make_riff_xma2(buf, 0x100, data->layers[i]->num_samples, stream_size, data->layers[i]->channels, data->layers[i]->sample_rate, block_count, block_size);
-            data->layers[i]->codec_data = init_ffmpeg_header_offset(temp_streamFile, buf,bytes, 0x00, stream_size);
-            if (!data->layers[i]->codec_data) goto fail;
+                bytes = ffmpeg_make_riff_xma2(buf, 0x100, data->layers[i]->num_samples, stream_size, data->layers[i]->channels, data->layers[i]->sample_rate, block_count, block_size);
+                data->layers[i]->codec_data = init_ffmpeg_header_offset(temp_sf, buf,bytes, 0x00, stream_size);
+                if (!data->layers[i]->codec_data) goto fail;
 
-            data->layers[i]->coding_type = coding_FFmpeg;
-            data->layers[i]->layout_type = layout_none;
-            data->layers[i]->stream_size = get_streamfile_size(temp_streamFile);
+                data->layers[i]->coding_type = coding_FFmpeg;
+                data->layers[i]->layout_type = layout_none;
+                data->layers[i]->stream_size = get_streamfile_size(temp_sf);
 
-            xma_fix_raw_samples(data->layers[i], temp_streamFile, 0x00,stream_size, 0, 0,0); /* samples are ok? */
+                xma_fix_raw_samples(data->layers[i], temp_sf, 0x00,stream_size, 0, 0,0); /* samples are ok? */
+                break;
+            }
+
+            /* Opus can do multichannel just fine, but that wasn't weird enough for EA */
+            case EAAC_CODEC_EAOPUS: {
+                int skip;
+                size_t data_size;
+
+                /* We'll remove EA blocks and pass raw data to FFmpeg Opus decoder */
+                temp_sf = setup_eaac_streamfile(sf_data, eaac->version, eaac->codec, eaac->streamed,i,layers, eaac->stream_offset);
+                if (!temp_sf) goto fail;
+
+                skip = ea_opus_get_encoder_delay(0x00, temp_sf);
+                data_size = get_streamfile_size(temp_sf);
+
+                data->layers[i]->codec_data = init_ffmpeg_ea_opus(temp_sf, 0x00,data_size, layer_channels, skip, eaac->sample_rate);
+                if (!data->layers[i]->codec_data) goto fail;
+                data->layers[i]->coding_type = coding_FFmpeg;
+                data->layers[i]->layout_type = layout_none;
+
+                //TODO: 6ch channel layout seems L C R BL BR LFE, not sure about other EAAC
+                break;
+            }
+
         }
 #else
         goto fail;
 #endif
 
-        if ( !vgmstream_open_stream(data->layers[i], temp_streamFile, 0x00) ) {
+        if ( !vgmstream_open_stream(data->layers[i], temp_sf, 0x00) ) {
             goto fail;
         }
     }
 
     if (!setup_layout_layered(data))
         goto fail;
-    close_streamfile(temp_streamFile);
+    close_streamfile(temp_sf);
     return data;
 
 fail:
-    close_streamfile(temp_streamFile);
+    close_streamfile(temp_sf);
     free_layout_layered(data);
     return NULL;
 }

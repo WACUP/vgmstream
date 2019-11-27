@@ -1,14 +1,21 @@
 #include "vgmstream.h"
+#include "coding/coding.h"
 
 
 /* Defines the list of accepted extensions. vgmstream doesn't use it internally so it's here
  * to inform plugins that need it. Common extensions are commented out to avoid stealing them
  * and possibly adding an unwanted association to the player. */
 
+/* Common extensions (like .wav or .ogg) should go in the common_extension_list. It should only
+ * contain common formats that vgmstream can also parse, to avoid hijacking them (since their
+ * plugins typically are faster and have desirable features vgmstream won't handle). Extensions of
+ * formats not parsed don't need to go there (for example .stm is a Scream Tracker Module elsewhere,
+ * but our .stm is very different so there is no conflict). */
+
 /* Some extensions require external libraries and could be #ifdef, not worth. */
 
 /* Formats marked as "not parsed" mean they'll go through FFmpeg, the header/extension isn't
- * parsed by vgmstream and typically won't not be fully accurate. May have a .ext.pos pair for fun. */
+ * parsed by vgmstream and typically won't not be fully accurate. */
 
 
 static const char* extension_list[] = {
@@ -24,8 +31,8 @@ static const char* extension_list[] = {
 
     //"aac", //common
     "aa3", //FFmpeg/not parsed (ATRAC3/ATRAC3PLUS/MP3/LPCM/WMA)
-    "aaap",
     "aax",
+    "abc", //txth/reserved [Find My Own Way (PS2) tech demo]
     "abk",
     //"ac3", //common, FFmpeg/not parsed (AC3)
     "acb",
@@ -94,7 +101,7 @@ static const char* extension_list[] = {
     "bik",
     "bika",
     "bik2",
-  //"bin", //common
+    //"bin", //common
     "bk2",
     "bmdx",
     "bms",
@@ -130,6 +137,7 @@ static const char* extension_list[] = {
     "data",
     "dax",
     "dbm",
+    "dct",
     "dcs",
     "ddsp",
     "de2",
@@ -174,7 +182,7 @@ static const char* extension_list[] = {
     "gin",
     "gms",
     "gsb",
-    //"gsf", //conflicts with GBA gsf plugins?
+    "gsf",
     "gtd",
     "gwm",
 
@@ -184,7 +192,6 @@ static const char* extension_list[] = {
     "hdr",
     "hgc1",
     "his",
-    "hlwav",
     "hps",
     "hsf",
     "hx2",
@@ -210,6 +217,7 @@ static const char* extension_list[] = {
     "imc",
     "int",
     "is14",
+    "isb",
     "isd",
     "isws",
     "itl",
@@ -267,6 +275,7 @@ static const char* extension_list[] = {
     "lwma", //fake extension for .wma, FFmpeg/not parsed
 
     "mab",
+    "mad",
     "map",
     "matx",
     "mc3",
@@ -282,6 +291,7 @@ static const char* extension_list[] = {
     "mihb",
     "mnstr",
     "mogg",
+    //"mp+", //common [Moonshine Runners (PC)]
     //"mp2", //common
     //"mp3", //common
     //"mp4", //common
@@ -317,6 +327,7 @@ static const char* extension_list[] = {
     "nps",
     "npsf", //fake extension/header id for .nps (in bigfiles)
     "nub",
+    "nub2",
     "nus3audio",
     "nus3bank",
     "nwa",
@@ -330,9 +341,10 @@ static const char* extension_list[] = {
     //"opus", //common
     "opusx",
     "otm",
+    "oto", //txth/reserved [Vampire Savior (SAT)]
     "ovb",
 
-    "p04", //txth/reserved [Psychic Force 2012 (DC)]
+    "p04", //txth/reserved [Psychic Force 2012 (DC), Skies of Arcadia (DC)]
     "p16", //txth/reserved [Astal (SAT)]
     "p1d", //txth/reserved [Farming Simulator 18 (3DS)]
     "p2a", //txth/reserved [Thunderhawk Operation Phoenix (PS2)]
@@ -441,7 +453,7 @@ static const char* extension_list[] = {
     "sss",
     "ster",
     "sth",
-    //"stm", //common
+    "stm",
     "stma", //fake extension/header id for .stm
     "str",
     "stream",
@@ -482,6 +494,7 @@ static const char* extension_list[] = {
     "va3",
     "vag",
     "vai",
+    "vam", //txth/reserved [Rocket Power: Beach Bandits (PS2)]
     "vas",
     "vawx",
     "vb",
@@ -550,7 +563,7 @@ static const char* extension_list[] = {
     "xss",
     "xvag",
     "xvas",
-    "xwav",//fake extension for .wav (renamed, to be removed)
+    "xwav", //fake extension for .wav (renamed, to be removed)
     "xwb",
     "xmd",
     "xopus",
@@ -564,6 +577,7 @@ static const char* extension_list[] = {
     "ydsp",
     "ymf",
 
+    "zic",
     "zsd",
     "zsm",
     "zss",
@@ -574,10 +588,33 @@ static const char* extension_list[] = {
     //, NULL //end mark
 };
 
+static const char* common_extension_list[] = {
+    "aac", //common
+    "ac3", //common, FFmpeg/not parsed (AC3)
+    "aif", //common
+    "aiff", //common
+    "bin", //common
+    "flac", //common
+    "mp+", //common [Moonshine Runners (PC)]
+    "mp2", //common
+    "mp3", //common
+    "mp4", //common
+    "mpc", //common
+    "ogg", //common
+    "opus", //common
+    "wav", //common
+};
+
+
 /* List supported formats and return elements in the list, for plugins that need to know. */
 const char ** vgmstream_get_formats(size_t * size) {
     *size = sizeof(extension_list) / sizeof(char*);
     return extension_list;
+}
+
+const char ** vgmstream_get_common_formats(size_t * size) {
+    *size = sizeof(common_extension_list) / sizeof(char*);
+    return common_extension_list;
 }
 
 
@@ -675,8 +712,8 @@ static const coding_info coding_info_list[] = {
         {coding_MSADPCM_int,        "Microsoft 4-bit ADPCM (mono/interleave)"},
         {coding_MSADPCM_ck,         "Microsoft 4-bit ADPCM (Cricket Audio)"},
         {coding_WS,                 "Westwood Studios VBR ADPCM"},
-        {coding_YAMAHA,             "Yamaha 4-bit ADPCM"},
-        {coding_YAMAHA_int,         "Yamaha 4-bit ADPCM (mono/interleave)"},
+        {coding_AICA,               "Yamaha AICA 4-bit ADPCM"},
+        {coding_AICA_int,           "Yamaha AICA 4-bit ADPCM (mono/interleave)"},
         {coding_ASKA,               "tri-Ace Aska 4-bit ADPCM"},
         {coding_NXAP,               "Nex NXAP 4-bit ADPCM"},
         {coding_NDS_PROCYON,        "Procyon Studio Digital Sound Elements NDS 4-bit APDCM"},
@@ -763,7 +800,7 @@ static const layout_info layout_info_list[] = {
         {layout_blocked_vs,             "blocked (Melbourne House VS)"},
         {layout_blocked_mul,            "blocked (MUL)"},
         {layout_blocked_gsb,            "blocked (GSB)"},
-        {layout_blocked_thp,            "blocked (THP Movie Audio)"},
+        {layout_blocked_thp,            "blocked (THP)"},
         {layout_blocked_filp,           "blocked (FILP)"},
         {layout_blocked_ea_swvr,        "blocked (EA SWVR)"},
         {layout_blocked_adm,            "blocked (ADM)"},
@@ -801,7 +838,7 @@ static const meta_info meta_info_list[] = {
         {meta_RFRM,                 "Retro Studios RFRM header"},
         {meta_NGC_ADPDTK,           "Nintendo ADP raw header"},
         {meta_RSF,                  "Retro Studios RSF raw header"},
-        {meta_AFC,                  "Nintendo AFC header"},
+        {meta_AFC,                  "Nintendo .AFC header"},
         {meta_AST,                  "Nintendo AST header"},
         {meta_HALPST,               "HAL Laboratory HALPST header"},
         {meta_DSP_RS03,             "Retro Studios RS03 header"},
@@ -835,6 +872,7 @@ static const meta_info meta_info_list[] = {
         {meta_PS2_VAGi,             "Sony VAGi header"},
         {meta_PS2_VAGp,             "Sony VAGp header"},
         {meta_PS2_pGAV,             "Sony pGAV header"},
+        {meta_PS2_VAGp_AAAP,        "Acclaim Austin AAAp VAG header"},
         {meta_SEB,                  "Game Arts .SEB header"},
         {meta_STR_WAV,              "Blitz Games .STR+WAV header"},
         {meta_PS2_ILD,              "ILD header"},
@@ -916,6 +954,7 @@ static const meta_info meta_info_list[] = {
         {meta_XMU,                  "Outrage XMU header"},
         {meta_XVAS,                 "Konami .XVAS header"},
         {meta_PS2_XA2,              "Acclaim XA2 Header"},
+        {meta_SAP,                  "VING .SAP header"},
         {meta_DC_IDVI,              "Capcom IDVI header"},
         {meta_KRAW,                 "Geometry Wars: Galaxies KRAW header"},
         {meta_NGC_YMF,              "YMF DSP Header"},
@@ -950,7 +989,7 @@ static const meta_info meta_info_list[] = {
         {meta_DCS_WAV,              "In Utero DCS+WAV header"},
         {meta_SMP,                  "Infernal Engine .smp header"},
         {meta_MUL,                  "Crystal Dynamics .MUL header"},
-        {meta_THP,                  "THP Movie File Format Header"},
+        {meta_THP,                  "Nintendo THP header"},
         {meta_STS_WII,              "Shikigami no Shiro (WII) Header"},
         {meta_PS2_P2BT,             "Pop'n'Music 7 Header"},
         {meta_PS2_GBTS,             "Pop'n'Music 9 Header"},
@@ -990,8 +1029,7 @@ static const meta_info meta_info_list[] = {
         {meta_EXAKT_SC,             "assumed Activision / EXAKT SC by extension"},
         {meta_WII_BNS,              "Nintendo BNS header"},
         {meta_WII_WAS,              "Sumo Digital iSWS header"},
-        {meta_XBOX_HLWAV,           "Half Life 2 bgm header"},
-        {meta_STX,                  "Nintendo .stx header"},
+        {meta_XBOX_HLWAV,           "Half-Life 2 .WAV header"},
         {meta_MYSPD,                "U-Sing .MYSPD header"},
         {meta_HIS,                  "Her Interactive HIS header"},
         {meta_PS2_AST,              "KOEI AST header"},
@@ -999,7 +1037,7 @@ static const meta_info meta_info_list[] = {
         {meta_DMSG,                 "RIFF/DMSGsegh header"},
         {meta_PONA_3DO,             "Policenauts BGM header"},
         {meta_PONA_PSX,             "Policenauts BGM header"},
-        {meta_NGC_DSP_AAAP,         "Acclaim Austin AAAp header"},
+        {meta_NGC_DSP_AAAP,         "Acclaim Austin AAAp DSP header"},
         {meta_NGC_DSP_KONAMI,       "Konami DSP header"},
         {meta_PS2_STER,             "STER Header"},
         {meta_BNSF,                 "Namco Bandai BNSF header"},
@@ -1062,7 +1100,7 @@ static const meta_info meta_info_list[] = {
         {meta_MN_STR,               "Mini Ninjas 'STR' header"},
         {meta_MSS,                  "Guerilla MCSS header"},
         {meta_PS2_HSF,              "Lowrider 'HSF' header"},
-        {meta_PS3_IVAG,             "PS3 'IVAG' Header"},
+        {meta_IVAG,                 "Namco IVAG header"},
         {meta_PS2_2PFS,             "Konami 2PFS header"},
         {meta_UBI_CKD,              "Ubisoft CKD RIFF header"},
         {meta_PS2_VBK,              "PS2 VBK Header"},
@@ -1071,7 +1109,7 @@ static const meta_info meta_info_list[] = {
         {meta_FSTM,                 "Nintendo FSTM Header"},
         {meta_KT_WIIBGM,            "Koei Tecmo WiiBGM Header"},
         {meta_KTSS,                 "Koei Tecmo Nintendo Stream KTSS Header"},
-        {meta_IDSP_NUS3,            "Namco NUS3 IDSP header"},
+        {meta_IDSP_NAMCO,           "Namco IDSP header"},
         {meta_WIIU_BTSND,           "Nintendo Wii U Menu Boot Sound"},
         {meta_MCA,                  "Capcom MCA header"},
         {meta_XB3D_ADX,             "Xenoblade 3D ADX header"},
@@ -1210,6 +1248,8 @@ static const meta_info meta_info_list[] = {
         {meta_XMV_VALVE,            "Valve XMV header"},
         {meta_UBI_HX,               "Ubisoft HXx header"},
         {meta_BMP_KONAMI,           "Konami BMP header"},
+        {meta_ISB,                  "Creative ISACT header"},
+        {meta_XSSB,                 "Artoon XSSB header"},
 
 };
 
@@ -1233,22 +1273,10 @@ void get_vgmstream_coding_description(VGMSTREAM *vgmstream, char *out, size_t ou
     switch (vgmstream->coding_type) {
 #ifdef VGM_USE_FFMPEG
         case coding_FFmpeg:
-        {
-            ffmpeg_codec_data *data = vgmstream->codec_data;
-
-            if (data) {
-                if (data->codec && data->codec->long_name) {
-                    description = data->codec->long_name;
-                } else if (data->codec && data->codec->name) {
-                    description = data->codec->name;
-                } else {
-                    description = "FFmpeg (unknown codec)";
-                }
-            } else {
+            description = ffmpeg_get_codec_name(vgmstream->codec_data);
+            if (description == NULL)
                 description = "FFmpeg";
-            }
             break;
-        }
 #endif
         default:
             list_length = sizeof(coding_info_list) / sizeof(coding_info);

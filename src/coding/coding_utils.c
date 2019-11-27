@@ -1159,26 +1159,13 @@ int w_bits(vgm_bitstream * ob, int num_bits, uint32_t value) {
 /* CUSTOM STREAMFILES                           */
 /* ******************************************** */
 
-STREAMFILE* setup_subfile_streamfile(STREAMFILE *streamFile, off_t subfile_offset, size_t subfile_size, const char* extension) {
-    STREAMFILE *temp_streamFile = NULL, *new_streamFile = NULL;
+STREAMFILE* setup_subfile_streamfile(STREAMFILE *sf, off_t subfile_offset, size_t subfile_size, const char* extension) {
+    STREAMFILE *new_sf = NULL;
 
-    new_streamFile = open_wrap_streamfile(streamFile);
-    if (!new_streamFile) goto fail;
-    temp_streamFile = new_streamFile;
-
-    new_streamFile = open_clamp_streamfile(temp_streamFile, subfile_offset,subfile_size);
-    if (!new_streamFile) goto fail;
-    temp_streamFile = new_streamFile;
-
+    new_sf = open_wrap_streamfile(sf);
+    new_sf = open_clamp_streamfile_f(new_sf, subfile_offset, subfile_size);
     if (extension) {
-        new_streamFile = open_fakename_streamfile(temp_streamFile, NULL,extension);
-        if (!new_streamFile) goto fail;
-        temp_streamFile = new_streamFile;
+        new_sf = open_fakename_streamfile_f(new_sf, NULL, extension);
     }
-
-    return temp_streamFile;
-
-fail:
-    close_streamfile(temp_streamFile);
-    return NULL;
+    return new_sf;
 }

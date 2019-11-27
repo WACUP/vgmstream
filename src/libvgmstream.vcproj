@@ -261,6 +261,10 @@
                     >
                 </File>
                 <File
+                    RelativePath=".\meta\ea_eaac_opus_streamfile.h"
+                    >
+                </File>
+                <File
                     RelativePath=".\meta\ea_schl_streamfile.h"
                     >
                 </File>
@@ -289,6 +293,10 @@
                     >
                 </File>
                 <File
+                    RelativePath=".\meta\nus3bank_streamfile.h"
+                    >
+                </File>
+                <File
                     RelativePath=".\meta\ogg_vorbis_streamfile.h"
                     >
                 </File>
@@ -309,11 +317,19 @@
                     >
                 </File>
                 <File
+                    RelativePath=".\meta\riff_ogg_streamfile.h"
+                    >
+                </File>
+                <File
                     RelativePath=".\meta\sfh_streamfile.h"
                     >
                 </File>
                 <File
                     RelativePath=".\meta\sqex_scd_streamfile.h"
+                    >
+                </File>
+                <File
+                    RelativePath=".\meta\sqex_sead_streamfile.h"
                     >
                 </File>
                 <File
@@ -728,6 +744,10 @@
 					RelativePath=".\meta\ios_psnd.c"
 					>
 				</File>
+                <File
+                    RelativePath=".\meta\isb.c"
+                    >
+                </File>
 				<File
 					RelativePath=".\meta\ish_isd.c"
 					>
@@ -1359,7 +1379,7 @@
 					>
 				</File>
 				<File
-					RelativePath=".\meta\ps3_ivag.c"
+					RelativePath=".\meta\ivag.c"
 					>
 				</File>
 				<File
@@ -1554,10 +1574,6 @@
                     RelativePath=".\meta\strm_abylight.c"
                     >
                 </File>
-				<File
-					RelativePath=".\meta\stx.c"
-					>
-				</File>
 				<File
 					RelativePath=".\meta\svs.c"
 					>
@@ -1770,10 +1786,14 @@
                     RelativePath=".\meta\xps.c"
                     >
                 </File>
-				<File
-					RelativePath=".\meta\xss.c"
-					>
-				</File>
+                <File
+                    RelativePath=".\meta\xss.c"
+                    >
+                </File>
+                <File
+                    RelativePath=".\meta\xssb.c"
+                    >
+                </File>
                 <File
                     RelativePath=".\meta\xvag.c"
                     >

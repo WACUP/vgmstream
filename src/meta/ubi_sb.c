@@ -207,22 +207,35 @@ VGMSTREAM * init_vgmstream_ubi_sb(STREAMFILE *streamFile) {
     /* SB HEADER */
     /* SBx layout: header, section1, section2, extra section, section3, data (all except header can be null) */
     sb.is_bank = 1;
-    sb.version       = read_32bit(0x00, streamFile);
+    sb.version = read_32bit(0x00, streamFile);
 
     if (!config_sb_version(&sb, streamFile))
         goto fail;
 
-    sb.section1_num  = read_32bit(0x04, streamFile);
-    sb.section2_num  = read_32bit(0x08, streamFile);
-    sb.section3_num  = read_32bit(0x0c, streamFile);
-    sb.sectionX_size = read_32bit(0x10, streamFile);
-    sb.flag1         = read_32bit(0x14, streamFile);
+    if (sb.version <= 0x0000000B) {
+        sb.section1_num  = read_32bit(0x04, streamFile);
+        sb.section2_num  = read_32bit(0x0c, streamFile);
+        sb.section3_num  = read_32bit(0x14, streamFile);
+        sb.sectionX_size = read_32bit(0x1c, streamFile);
 
-    if (sb.version <= 0x000A0000) {
+        sb.section1_offset = 0x20;
+    } else if (sb.version <= 0x000A0000) {
+        sb.section1_num  = read_32bit(0x04, streamFile);
+        sb.section2_num  = read_32bit(0x08, streamFile);
+        sb.section3_num  = read_32bit(0x0c, streamFile);
+        sb.sectionX_size = read_32bit(0x10, streamFile);
+        sb.flag1         = read_32bit(0x14, streamFile);
+
         sb.section1_offset = 0x18;
     } else {
+        sb.section1_num  = read_32bit(0x04, streamFile);
+        sb.section2_num  = read_32bit(0x08, streamFile);
+        sb.section3_num  = read_32bit(0x0c, streamFile);
+        sb.sectionX_size = read_32bit(0x10, streamFile);
+        sb.flag1         = read_32bit(0x14, streamFile);
+        sb.flag2         = read_32bit(0x18, streamFile);
+
         sb.section1_offset = 0x1c;
-        sb.flag2 = read_32bit(0x18, streamFile);
     }
 
     if (sb.cfg.is_padded_section1_offset)
@@ -584,7 +597,7 @@ static VGMSTREAM * init_vgmstream_ubi_sb_base(ubi_sb_header *sb, STREAMFILE *str
             int block_align, encoder_delay;
 
             block_align = 0x98 * sb->channels;
-            encoder_delay = 0; /* TODO: this is may be incorrect */
+            encoder_delay = 1024 + 69*2; /* approximate */
 
             vgmstream->codec_data = init_ffmpeg_atrac3_raw(streamData, start_offset,sb->stream_size, sb->num_samples,sb->channels,sb->sample_rate, block_align, encoder_delay);
             if (!vgmstream->codec_data) goto fail;
@@ -661,14 +674,12 @@ static VGMSTREAM * init_vgmstream_ubi_sb_base(ubi_sb_header *sb, STREAMFILE *str
             xma_fix_raw_samples_ch(vgmstream, streamData, start_offset, sb->stream_size, sb->channels, 0, 0);
             break;
         }
-
+#endif
+#ifdef VGM_USE_VORBIS
         case FMT_OGG: {
-            ffmpeg_codec_data *ffmpeg_data;
-
-            ffmpeg_data = init_ffmpeg_offset(streamData, start_offset, sb->stream_size);
-            if ( !ffmpeg_data ) goto fail;
-            vgmstream->codec_data = ffmpeg_data;
-            vgmstream->coding_type = coding_FFmpeg;
+            vgmstream->codec_data = init_ogg_vorbis(streamData, start_offset, sb->stream_size, NULL);
+            if (!vgmstream->codec_data) goto fail;
+            vgmstream->coding_type = coding_OGG_VORBIS;
             vgmstream->layout_type = layout_none;
             break;
         }
@@ -1371,9 +1382,8 @@ fail:
 }
 
 static int parse_type_silence(ubi_sb_header * sb, off_t offset, STREAMFILE* streamFile) {
+    float (*read_f32)(off_t,STREAMFILE*) = sb->big_endian ? read_f32be : read_f32le;
     int32_t (*read_32bit)(off_t,STREAMFILE*) = sb->big_endian ? read_32bitBE : read_32bitLE;
-    uint32_t duration_int;
-    float* duration_float;
 
     /* silence header */
     sb->type = UBI_SILENCE;
@@ -1383,13 +1393,11 @@ static int parse_type_silence(ubi_sb_header * sb, off_t offset, STREAMFILE* stre
     }
 
     if (sb->cfg.silence_duration_int) {
-        duration_int = (uint32_t)read_32bit(offset + sb->cfg.silence_duration_int, streamFile);
+        uint32_t duration_int = (uint32_t)read_32bit(offset + sb->cfg.silence_duration_int, streamFile);
         sb->duration = (float)duration_int / 65536.0f; /* 65536.0 is common so probably means 1.0 */
     }
     else if (sb->cfg.silence_duration_float) {
-        duration_int = (uint32_t)read_32bit(offset + sb->cfg.silence_duration_float, streamFile);
-        duration_float = (float*)&duration_int;
-        sb->duration = *duration_float;
+        sb->duration = read_f32(offset + sb->cfg.silence_duration_float, streamFile);
     }
 
     return 1;
@@ -2356,6 +2364,21 @@ static int config_sb_version(ubi_sb_header * sb, STREAMFILE *streamFile) {
         return 1;
     }
 
+    /* Rainbow Six 3 (2003)(PC)-bank 0x0000000B */
+    if (sb->version == 0x0000000B && sb->platform == UBI_PC) {
+        config_sb_entry(sb, 0x5c, 0x7c);
+
+        config_sb_audio_fs(sb, 0x24, 0x00, 0x28);
+        config_sb_audio_hs(sb, 0x46, 0x40, 0x2c, 0x34, 0x4c, 0x48);
+        sb->cfg.audio_has_internal_names = 1;
+
+        config_sb_sequence(sb, 0x28, 0x34);
+
+        config_sb_layer_hs(sb, 0x20, 0x60, 0x58, 0x30);
+        config_sb_layer_sh(sb, 0x14, 0x00, 0x06, 0x08, 0x10);
+        return 1;
+    }
+
     /* Prince of Persia: The Sands of Time Demo (2003)(Xbox)-bank 0x0000000D */
     if (sb->version == 0x0000000D && sb->platform == UBI_XBOX) {
         config_sb_entry(sb, 0x5c, 0x74);
@@ -2363,6 +2386,11 @@ static int config_sb_version(ubi_sb_header * sb, STREAMFILE *streamFile) {
         config_sb_audio_fs(sb, 0x24, 0x00, 0x28);
         config_sb_audio_hs(sb, 0x46, 0x40, 0x2c, 0x34, 0x4c, 0x48);
         sb->cfg.audio_has_internal_names = 1;
+
+        config_sb_sequence(sb, 0x28, 0x34);
+
+        config_sb_layer_hs(sb, 0x20, 0x60, 0x58, 0x30);
+        config_sb_layer_sh(sb, 0x14, 0x00, 0x06, 0x08, 0x10);
         return 1;
     }
 
@@ -2399,6 +2427,8 @@ static int config_sb_version(ubi_sb_header * sb, STREAMFILE *streamFile) {
     /* two configs with same id; use project file as identifier */
     if (sb->version == 0x000A0007 && sb->platform == UBI_PS2) {
         STREAMFILE * streamTest = open_streamfile_by_filename(streamFile, "BIAAUDIO.SP1");
+        if (!streamTest) /* try again for localized subfolders */
+            streamTest = open_streamfile_by_filename(streamFile, "../BIAAUDIO.SP1");
         if (streamTest) {
             is_bia_ps2 = 1;
             close_streamfile(streamTest);

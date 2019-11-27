@@ -51,6 +51,7 @@ VGMSTREAM * (*init_vgmstream_functions[])(STREAMFILE *streamFile) = {
     init_vgmstream_ps2_mic,
     init_vgmstream_ngc_dsp_std_int,
     init_vgmstream_vag,
+    init_vgmstream_vag_aaap,
     init_vgmstream_seb,
     init_vgmstream_ps2_ild,
     init_vgmstream_ps2_pnb,
@@ -221,7 +222,6 @@ VGMSTREAM * (*init_vgmstream_functions[])(STREAMFILE *streamFile) = {
     init_vgmstream_pona_3do,
     init_vgmstream_pona_psx,
     init_vgmstream_xbox_hlwav,
-    init_vgmstream_stx,
     init_vgmstream_myspd,
     init_vgmstream_his,
     init_vgmstream_ps2_ast,
@@ -285,14 +285,14 @@ VGMSTREAM * (*init_vgmstream_functions[])(STREAMFILE *streamFile) = {
     init_vgmstream_mn_str,
     init_vgmstream_mss,
     init_vgmstream_ps2_hsf,
-    init_vgmstream_ps3_ivag,
+    init_vgmstream_ivag,
     init_vgmstream_ps2_2pfs,
     init_vgmstream_xnb,
     init_vgmstream_ubi_ckd,
     init_vgmstream_ps2_vbk,
     init_vgmstream_otm,
     init_vgmstream_bcstm,
-    init_vgmstream_idsp_nus3,
+    init_vgmstream_idsp_namco,
     init_vgmstream_kt_g1l,
     init_vgmstream_kt_wiibgm,
     init_vgmstream_ktss,
@@ -405,6 +405,7 @@ VGMSTREAM * (*init_vgmstream_functions[])(STREAMFILE *streamFile) = {
     init_vgmstream_hd3_bd3,
     init_vgmstream_bnk_sony,
     init_vgmstream_nus3bank,
+    init_vgmstream_nus3bank_encrypted,
     init_vgmstream_scd_sscf,
     init_vgmstream_dsp_sps_n1,
     init_vgmstream_dsp_itl_ch,
@@ -479,6 +480,10 @@ VGMSTREAM * (*init_vgmstream_functions[])(STREAMFILE *streamFile) = {
     init_vgmstream_xmv_valve,
     init_vgmstream_ubi_hx,
     init_vgmstream_bmp_konami,
+    init_vgmstream_opus_opusnx,
+    init_vgmstream_opus_sqex,
+    init_vgmstream_isb,
+    init_vgmstream_xssb,
 
     /* lowest priority metas (should go after all metas, and TXTH should go before raw formats) */
     init_vgmstream_txth,            /* proper parsers should supersede TXTH, once added */
@@ -1093,6 +1098,11 @@ void render_vgmstream(sample_t * buffer, int32_t sample_count, VGMSTREAM * vgmst
 
 /* Get the number of samples of a single frame (smallest self-contained sample group, 1/N channels) */
 int get_vgmstream_samples_per_frame(VGMSTREAM * vgmstream) {
+    /* Value returned here is the max (or less) that vgmstream will ask a decoder per
+     * "decode_x" call. Decoders with variable samples per frame or internal discard
+     * may return 0 here and handle arbitrary samples_to_do values internally
+     * (or some internal sample buffer max too). */
+
     switch (vgmstream->coding_type) {
         case coding_CRI_ADX:
         case coding_CRI_ADX_fixed:
@@ -1208,15 +1218,15 @@ int get_vgmstream_samples_per_frame(VGMSTREAM * vgmstream) {
             return 128;
 
         case coding_MSADPCM:
-            return (vgmstream->interleave_block_size - 0x07*vgmstream->channels)*2 / vgmstream->channels + 2;
+            return (vgmstream->frame_size - 0x07*vgmstream->channels)*2 / vgmstream->channels + 2;
         case coding_MSADPCM_int:
         case coding_MSADPCM_ck:
-            return (vgmstream->interleave_block_size - 0x07)*2 + 2;
+            return (vgmstream->frame_size - 0x07)*2 + 2;
         case coding_WS: /* only works if output sample size is 8 bit, which always is for WS ADPCM */
             return vgmstream->ws_output_size;
-        case coding_YAMAHA:
+        case coding_AICA:
             return 1;
-        case coding_YAMAHA_int:
+        case coding_AICA_int:
             return 2;
         case coding_ASKA:
             return (0x40-0x04*vgmstream->channels) * 2 / vgmstream->channels;
@@ -1239,14 +1249,7 @@ int get_vgmstream_samples_per_frame(VGMSTREAM * vgmstream) {
 #endif
 #ifdef VGM_USE_FFMPEG
         case coding_FFmpeg:
-            if (vgmstream->codec_data) {
-                ffmpeg_codec_data *data = (ffmpeg_codec_data*)vgmstream->codec_data;
-                return data->sampleBufferBlock; /* must know the full block size for edge loops */
-            }
-            else {
-                return 0;
-            }
-            break;
+            return 0;
 #endif
         case coding_MTAF:
             return 128*2;
@@ -1407,11 +1410,11 @@ int get_vgmstream_frame_size(VGMSTREAM * vgmstream) {
         case coding_MSADPCM:
         case coding_MSADPCM_int:
         case coding_MSADPCM_ck:
-            return vgmstream->interleave_block_size;
+            return vgmstream->frame_size;
         case coding_WS:
             return vgmstream->current_block_size;
-        case coding_YAMAHA:
-        case coding_YAMAHA_int:
+        case coding_AICA:
+        case coding_AICA_int:
             return 0x01;
         case coding_ASKA:
         case coding_NXAP:
@@ -1493,37 +1496,15 @@ void decode_vgmstream(VGMSTREAM * vgmstream, int samples_written, int samples_to
 
     switch (vgmstream->coding_type) {
         case coding_CRI_ADX:
-            for (ch = 0; ch < vgmstream->channels; ch++) {
-                decode_adx(&vgmstream->ch[ch],buffer+samples_written*vgmstream->channels+ch,
-                        vgmstream->channels,vgmstream->samples_into_block,samples_to_do,
-                        vgmstream->interleave_block_size);
-            }
-
-            break;
         case coding_CRI_ADX_exp:
-            for (ch = 0; ch < vgmstream->channels; ch++) {
-                decode_adx_exp(&vgmstream->ch[ch],buffer+samples_written*vgmstream->channels+ch,
-                        vgmstream->channels,vgmstream->samples_into_block,samples_to_do,
-                        vgmstream->interleave_block_size);
-            }
-
-            break;
         case coding_CRI_ADX_fixed:
-            for (ch = 0; ch < vgmstream->channels; ch++) {
-                decode_adx_fixed(&vgmstream->ch[ch],buffer+samples_written*vgmstream->channels+ch,
-                        vgmstream->channels,vgmstream->samples_into_block,samples_to_do,
-                        vgmstream->interleave_block_size);
-            }
-
-            break;
         case coding_CRI_ADX_enc_8:
         case coding_CRI_ADX_enc_9:
             for (ch = 0; ch < vgmstream->channels; ch++) {
-                decode_adx_enc(&vgmstream->ch[ch],buffer+samples_written*vgmstream->channels+ch,
+                decode_adx(&vgmstream->ch[ch],buffer+samples_written*vgmstream->channels+ch,
                         vgmstream->channels,vgmstream->samples_into_block,samples_to_do,
-                        vgmstream->interleave_block_size);
+                        vgmstream->interleave_block_size, vgmstream->coding_type);
             }
-
             break;
         case coding_NGC_DSP:
             for (ch = 0; ch < vgmstream->channels; ch++) {
@@ -2008,12 +1989,12 @@ void decode_vgmstream(VGMSTREAM * vgmstream, int samples_written, int samples_to
                         vgmstream->channels,vgmstream->samples_into_block, samples_to_do, ch);
             }
             break;
-        case coding_YAMAHA:
-        case coding_YAMAHA_int:
+        case coding_AICA:
+        case coding_AICA_int:
             for (ch = 0; ch < vgmstream->channels; ch++) {
-                int is_stereo = (vgmstream->channels > 1 && vgmstream->coding_type == coding_YAMAHA);
+                int is_stereo = (vgmstream->channels > 1 && vgmstream->coding_type == coding_AICA);
 
-                decode_yamaha(&vgmstream->ch[ch],buffer+samples_written*vgmstream->channels+ch,
+                decode_aica(&vgmstream->ch[ch],buffer+samples_written*vgmstream->channels+ch,
                         vgmstream->channels,vgmstream->samples_into_block,samples_to_do, ch,
                         is_stereo);
             }
@@ -2412,7 +2393,8 @@ void describe_vgmstream(VGMSTREAM * vgmstream, char * desc, int length) {
     }
 
     /* codecs with configurable frame size */
-    if (vgmstream->layout_type == layout_none && vgmstream->interleave_block_size > 0) {
+    if (vgmstream->frame_size > 0 || vgmstream->interleave_block_size > 0) {
+        int32_t frame_size = vgmstream->frame_size > 0 ? vgmstream->frame_size : vgmstream->interleave_block_size;
         switch (vgmstream->coding_type) {
             case coding_MSADPCM:
             case coding_MSADPCM_int:
@@ -2422,7 +2404,7 @@ void describe_vgmstream(VGMSTREAM * vgmstream, char * desc, int length) {
             case coding_WWISE_IMA:
             case coding_REF_IMA:
             case coding_PSX_cfg:
-                snprintf(temp,TEMPSIZE, "frame size: %#x bytes\n", (int32_t)vgmstream->interleave_block_size);
+                snprintf(temp,TEMPSIZE, "frame size: %#x bytes\n", frame_size);
                 concatn(length,desc,temp);
                 break;
             default:
@@ -2462,13 +2444,13 @@ void describe_vgmstream(VGMSTREAM * vgmstream, char * desc, int length) {
 static void try_dual_file_stereo(VGMSTREAM * opened_vgmstream, STREAMFILE *streamFile, VGMSTREAM*(*init_vgmstream_function)(STREAMFILE *)) {
     /* filename search pairs for dual file stereo */
     static const char * const dfs_pairs[][2] = {
-        {"L","R"},
-        {"l","r"},
-        {"left","right"},
-        {"Left","Right"},
+        {"L","R"}, /* most common in .dsp and .vag */
+        {"l","r"}, /* same */
+        {"left","right"}, /* Freaky Flyers (GC) .adp, Velocity (PSP) .vag, Hyper Fighters (Wii) .dsp */
+        {"Left","Right"}, /* Geometry Wars: Galaxies (Wii) .dsp */
         {".V0",".V1"}, /* Homura (PS2) */
         {".L",".R"}, /* Crash Nitro Racing (PS2), Gradius V (PS2) */
-        {"_0","_1"}, /* fake for Homura/unneeded? */
+        {"_0.dsp","_1.dsp"}, /* Wario World (GC) */
         {".adpcm","_NxEncoderOut_.adpcm"}, /* Kill la Kill: IF (Switch) */ //todo can't match R>L
     };
     char new_filename[PATH_LIMIT];
@@ -2488,13 +2470,13 @@ static void try_dual_file_stereo(VGMSTREAM * opened_vgmstream, STREAMFILE *strea
     //todo other layouts work but some stereo codecs do weird things
     //if (opened_vgmstream->layout != layout_none) return;
 
-    get_streamfile_name(streamFile,new_filename,sizeof(new_filename));
+    get_streamfile_name(streamFile, new_filename, sizeof(new_filename));
     filename_len = strlen(new_filename);
     if (filename_len < 2)
         return;
 
     extension = (char *)filename_extension(new_filename);
-    if (extension - new_filename >= 1 && extension[-1] == '.')
+    if (extension - new_filename >= 1 && extension[-1] == '.') /* [-1] is ok, yeah */
         extension--; /* must include "." */
     extension_len = strlen(extension);
 
@@ -2510,16 +2492,16 @@ static void try_dual_file_stereo(VGMSTREAM * opened_vgmstream, STREAMFILE *strea
 
             //;VGM_LOG("DFS: l=%s, r=%s\n", this_suffix,that_suffix);
 
-            /* is suffix matches paste opposite suffix (+ terminator) to extension pointer, thus to new_filename */
-            if (this_suffix[0] == '.' && extension_len == this_suffix_len) { /* same extension */
-                //;VGM_LOG("DFS: same ext %s vs %s len %i\n", extension, this_suffix, this_suffix_len);
-                if (memcmp(extension,this_suffix,this_suffix_len) == 0) {
+            /* if suffix matches paste opposite suffix (+ terminator) to extension pointer, thus to new_filename */
+            if (filename_len > this_suffix_len && strchr(this_suffix, '.') != NULL) { /* same suffix with extension */
+                //;VGM_LOG("DFS: suf+ext %s vs %s len %i\n", new_filename, this_suffix, this_suffix_len);
+                if (memcmp(new_filename + (filename_len - this_suffix_len), this_suffix, this_suffix_len) == 0) {
                     dfs_pair = j;
-                    memcpy (extension, that_suffix,that_suffix_len+1);
+                    memcpy (new_filename + (filename_len - this_suffix_len), that_suffix,that_suffix_len+1);
                 }
             }
-            else if (filename_len > this_suffix_len) { /* same suffix (without extension) */
-                //;VGM_LOG("DFS: same suf %s vs %s len %i\n", extension - this_suffix_len, this_suffix, this_suffix_len);
+            else if (filename_len - extension_len > this_suffix_len) { /* same suffix without extension */
+                //;VGM_LOG("DFS: suf-ext %s vs %s len %i\n", extension - this_suffix_len, this_suffix, this_suffix_len);
                 if (memcmp(extension - this_suffix_len, this_suffix,this_suffix_len) == 0) {
                     dfs_pair = j;
                     memmove(extension + that_suffix_len - this_suffix_len, extension,extension_len+1); /* move old extension to end */
@@ -2535,7 +2517,7 @@ static void try_dual_file_stereo(VGMSTREAM * opened_vgmstream, STREAMFILE *strea
     //;VGM_LOG("DFS: match %i filename=%s\n", dfs_pair, new_filename);
 
     /* try to init other channel (new_filename now has the opposite name) */
-    dual_streamFile = open_streamfile(streamFile,new_filename);
+    dual_streamFile = open_streamfile(streamFile, new_filename);
     if (!dual_streamFile) goto fail;
 
     new_vgmstream = init_vgmstream_function(dual_streamFile); /* use the init that just worked, no other should work */
@@ -2619,6 +2601,8 @@ static void try_dual_file_stereo(VGMSTREAM * opened_vgmstream, STREAMFILE *strea
         opened_vgmstream->channels = 2;
 
         /* discard the second VGMSTREAM */
+        mixing_close(new_vgmstream);
+        free(new_vgmstream->start_vgmstream);
         free(new_vgmstream);
 
         mixing_update_channel(opened_vgmstream); /* notify of new channel hacked-in */
@@ -2645,8 +2629,7 @@ static STREAMFILE * get_vgmstream_average_bitrate_channel_streamfile(VGMSTREAM *
 
 #ifdef VGM_USE_VORBIS
     if (vgmstream->coding_type == coding_OGG_VORBIS) {
-        ogg_vorbis_codec_data *data = vgmstream->codec_data;
-        return data ? data->ov_streamfile.streamfile : NULL;
+        return ogg_vorbis_get_streamfile(vgmstream->codec_data);
     }
 #endif
     if (vgmstream->coding_type == coding_CRI_HCA) {
@@ -2806,13 +2789,38 @@ int vgmstream_open_stream(VGMSTREAM * vgmstream, STREAMFILE *streamFile, off_t s
         return 1;
 #endif
 
+    if ((vgmstream->coding_type == coding_PSX_cfg ||
+            vgmstream->coding_type == coding_PSX_pivotal) &&
+            (vgmstream->interleave_block_size == 0 || vgmstream->interleave_block_size > 0x50)) {
+        VGM_LOG("VGMSTREAM: PSX-cfg decoder with wrong frame size %x\n", vgmstream->interleave_block_size);
+        goto fail;
+    }
+
+    if ((vgmstream->coding_type == coding_CRI_ADX ||
+            vgmstream->coding_type == coding_CRI_ADX_enc_8 ||
+            vgmstream->coding_type == coding_CRI_ADX_enc_9 ||
+            vgmstream->coding_type == coding_CRI_ADX_exp ||
+            vgmstream->coding_type == coding_CRI_ADX_fixed) &&
+            (vgmstream->interleave_block_size == 0 || vgmstream->interleave_block_size > 0x12)) {
+        VGM_LOG("VGMSTREAM: ADX decoder with wrong frame size %x\n", vgmstream->interleave_block_size);
+        goto fail;
+    }
+
+    if ((vgmstream->coding_type == coding_MSADPCM ||
+            vgmstream->coding_type == coding_MSADPCM_ck ||
+            vgmstream->coding_type == coding_MSADPCM_int) &&
+            vgmstream->frame_size == 0) {
+        vgmstream->frame_size = vgmstream->interleave_block_size;
+    }
+
     /* if interleave is big enough keep a buffer per channel */
     if (vgmstream->interleave_block_size * vgmstream->channels >= STREAMFILE_DEFAULT_BUFFER_SIZE) {
         use_streamfile_per_channel = 1;
     }
 
     /* if blocked layout (implicit) use multiple streamfiles; using only one leads to
-     * lots of buffer-trashing, with all the jumping around in the block layout */
+     * lots of buffer-trashing, with all the jumping around in the block layout
+     * (this increases total of data read but still seems faster) */
     if (vgmstream->layout_type != layout_none && vgmstream->layout_type != layout_interleave) {
         use_streamfile_per_channel = 1;
     }
@@ -2853,7 +2861,8 @@ int vgmstream_open_stream(VGMSTREAM * vgmstream, STREAMFILE *streamFile, off_t s
                 offset = start_offset + vgmstream->interleave_block_size*ch;
             }
 
-            /* open new one if needed */
+            /* open new one if needed, useful to avoid jumping around when each channel data is too apart
+             * (don't use when data is close as it'd make buffers read the full file multiple times) */
             if (use_streamfile_per_channel) {
                 file = open_streamfile(streamFile,filename);
                 if (!file) goto fail;
@@ -2878,4 +2887,21 @@ int vgmstream_open_stream(VGMSTREAM * vgmstream, STREAMFILE *streamFile, off_t s
 fail:
     /* open streams will be closed in close_vgmstream(), hopefully called by the meta */
     return 0;
+}
+
+int vgmstream_is_virtual_filename(const char* filename) {
+    int len = strlen(filename);
+    if (len < 6)
+        return 0;
+
+    /* vgmstream can play .txtp files that have size 0 but point to another file with config
+     * based only in the filename (ex. "file.fsb #2.txtp" plays 2nd subsong of file.fsb).
+     *
+     * Also, .m3u playlist can include files that don't exist, and players often allow filenames
+     * pointing to nothing (since could be some protocol/url).
+     *
+     * Plugins can use both quirks to allow "virtual files" (.txtp) in .m3u that don't need
+     * to exist but allow config. Plugins with this function if the filename is virtual,
+     * and their STREAMFILEs should be modified as to ignore null FILEs and report size 0. */
+    return strcmp(&filename[len-5], ".txtp") == 0;
 }

@@ -111,6 +111,7 @@
     <ClInclude Include="meta\bar_streamfile.h" />
     <ClInclude Include="meta\bgw_streamfile.h" />
     <ClInclude Include="meta\ea_eaac_streamfile.h" />
+    <ClInclude Include="meta\ea_eaac_opus_streamfile.h" />
     <ClInclude Include="meta\ea_schl_streamfile.h" />
     <ClInclude Include="meta\fsb_interleave_streamfile.h" />
     <ClInclude Include="meta\fsb5_interleave_streamfile.h" />
@@ -121,10 +122,13 @@
     <ClInclude Include="meta\xavs_streamfile.h" />
     <ClInclude Include="meta\mta2_streamfile.h" />
     <ClInclude Include="meta\mzrt_streamfile.h" />
+    <ClInclude Include="meta\nus3bank_streamfile.h" />
     <ClInclude Include="meta\ogg_vorbis_streamfile.h" />
     <ClInclude Include="meta\opus_interleave_streamfile.h" />
+    <ClInclude Include="meta\riff_ogg_streamfile.h" />
     <ClInclude Include="meta\sfh_streamfile.h" />
     <ClInclude Include="meta\sqex_scd_streamfile.h" />
+    <ClInclude Include="meta\sqex_sead_streamfile.h" />
     <ClInclude Include="meta\txth_streamfile.h" />
     <ClInclude Include="meta\ubi_bao_streamfile.h" />
     <ClInclude Include="meta\ubi_sb_streamfile.h" />
@@ -198,7 +202,7 @@
     <ClCompile Include="meta\rad.c" />
     <ClCompile Include="meta\vs_str.c" />
     <ClCompile Include="meta\ps2_wmus.c" />
-    <ClCompile Include="meta\ps3_ivag.c" />
+    <ClCompile Include="meta\ivag.c" />
     <ClCompile Include="meta\ps3_past.c" />
     <ClCompile Include="meta\psf.c" />
     <ClCompile Include="meta\sgxd.c" />
@@ -308,6 +312,7 @@
     <ClCompile Include="meta\his.c" />
     <ClCompile Include="meta\idsp_ie.c" />
     <ClCompile Include="meta\nub.c" />
+    <ClCompile Include="meta\isb.c" />
     <ClCompile Include="meta\ish_isd.c" />
     <ClCompile Include="meta\ivaud.c" />
     <ClCompile Include="meta\ivb.c" />
@@ -318,12 +323,7 @@
     <ClCompile Include="meta\mca.c" />
     <ClCompile Include="meta\msvp.c" />
     <ClCompile Include="meta\mus_vc.c" />
-    <ClCompile Include="meta\mus_acm.c">
-      <ObjectFileName Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(IntDir)%(Filename)1.obj</ObjectFileName>
-      <XMLDocumentationFileName Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(IntDir)%(Filename)1.xdc</XMLDocumentationFileName>
-      <ObjectFileName Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(IntDir)%(Filename)1.obj</ObjectFileName>
-      <XMLDocumentationFileName Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(IntDir)%(Filename)1.xdc</XMLDocumentationFileName>
-    </ClCompile>
+    <ClCompile Include="meta\mus_acm.c" />
     <ClCompile Include="meta\musc.c" />
     <ClCompile Include="meta\musx.c" />
     <ClCompile Include="meta\myspd.c" />
@@ -478,7 +478,6 @@
     <ClCompile Include="meta\str_snds.c" />
     <ClCompile Include="meta\str_wav.c" />
     <ClCompile Include="meta\strm_abylight.c" />
-    <ClCompile Include="meta\stx.c" />
     <ClCompile Include="meta\svs.c" />
     <ClCompile Include="meta\sxd.c" />
     <ClCompile Include="meta\ta_aac.c" />
@@ -513,7 +512,6 @@
     <ClCompile Include="meta\wwise.c" />
     <ClCompile Include="meta\xau.c" />
     <ClCompile Include="meta\xavs.c" />
-    <ClCompile Include="meta\xbox_hlwav.c" />
     <ClCompile Include="meta\xbox_ims.c" />
     <ClCompile Include="meta\raw_wavm.c" />
     <ClCompile Include="meta\xmu.c" />
@@ -525,6 +523,7 @@
     <ClCompile Include="meta\xpcm.c" />
     <ClCompile Include="meta\xps.c" />
     <ClCompile Include="meta\xss.c" />
+    <ClCompile Include="meta\xssb.c" />
     <ClCompile Include="meta\xvag.c" />
     <ClCompile Include="meta\xmd.c" />
     <ClCompile Include="meta\xwb.c" />
