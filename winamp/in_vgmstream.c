@@ -45,6 +45,7 @@
 
 #include <loader/loader/utils.h>
 #include <loader/loader/paths.h>
+#include <loader/loader/ini.h>
 
 #include "resource.h"
 
@@ -53,10 +54,10 @@
 #endif
 
 #ifndef VERSIONW
-#define VERSIONW L"2.1.2466"
+#define VERSIONW L"2.1.2797"
 #endif
 
-#define LIBVGMSTREAM_BUILD "1050-2655-g2ac2c0ce-wacup"
+#define LIBVGMSTREAM_BUILD "1050-2797-g5ea57c08-wacup"
 #define APP_NAME "vgmstream plugin"
 #define PLUGIN_DESCRIPTION "vgmstream Decoder v" VERSION
 #define PLUGIN_DESCRIPTIONW L"vgmstream Decoder v" VERSIONW
@@ -86,6 +87,8 @@ wchar_t plugindir[MAX_PATH] = {0};
 #define DISABLE_SUBSONGS_INI_ENTRY TEXT("disable_subsongs")
 #define DOWNMIX_CHANNELS_INI_ENTRY TEXT("downmix_channels")
 #define DISABLE_TAGFILE_INI_ENTRY TEXT("tagfile_disable")
+#define EXTS_UNKNOWN_ON TEXT("exts_unknown_on")
+#define EXTS_COMMON_ON TEXT("exts_common_on")
 
 double fade_seconds = 10.0;
 double fade_delay_seconds = 0.0;
@@ -96,6 +99,8 @@ int disable_subsongs = 0;
 int downmix_channels = 0;
 int loaded_config = 0;
 int tagfile_disable = 0;
+int exts_unknown_on = 0;
+int exts_common_on = 0;
 
 // {B6CB4A7C-A8D0-4c55-8E60-9F7A7A23DA0F}
 static const GUID playbackConfigGroupGUID = 
@@ -308,6 +313,8 @@ static void cfg_char_to_wchar(TCHAR *wdst, size_t wdstsize, const char *src) {
 #define DEFAULT_DISABLE_SUBSONGS 0
 #define DEFAULT_DOWNMIX_CHANNELS 0
 #define DEFAULT_TAGFILE_DISABLE 0
+#define DEFAULT_EXTS_UNKNOWN_ON 0
+#define DEFAULT_EXTS_COMMON_ON 0
 
 void read_config() {
 	if (!loaded_config) {
@@ -316,23 +323,23 @@ void read_config() {
 
 		loaded_config = 1;
 
-		GetPrivateProfileString(CONFIG_APP_NAME, FADE_SECONDS_INI_ENTRY, DEFAULT_FADE_SECONDS, buf, ARRAYSIZE(buf), GetPaths()->plugin_ini_file);
+		GetNativeIniString(PLUGIN_INI, CONFIG_APP_NAME, FADE_SECONDS_INI_ENTRY, DEFAULT_FADE_SECONDS, buf, ARRAYSIZE(buf));
 		if (swscanf(buf, L"%lf%n", &fade_seconds, &consumed) < 1 || consumed != wcslen(buf) || fade_seconds < 0) {
 			(void)swscanf(DEFAULT_FADE_SECONDS, L"%lf", &fade_seconds);
 		}
 
-		GetPrivateProfileString(CONFIG_APP_NAME, FADE_DELAY_SECONDS_INI_ENTRY, DEFAULT_FADE_DELAY_SECONDS, buf, ARRAYSIZE(buf), GetPaths()->plugin_ini_file);
+		GetNativeIniString(PLUGIN_INI, CONFIG_APP_NAME, FADE_DELAY_SECONDS_INI_ENTRY, DEFAULT_FADE_DELAY_SECONDS, buf, ARRAYSIZE(buf));
 		if (swscanf(buf, L"%lf%n", &fade_delay_seconds, &consumed) < 1 || consumed != wcslen(buf)) {
 			(void)swscanf(DEFAULT_FADE_DELAY_SECONDS, L"%lf", &fade_delay_seconds);
 		}
 
-		GetPrivateProfileString(CONFIG_APP_NAME, LOOP_COUNT_INI_ENTRY, DEFAULT_LOOP_COUNT, buf, ARRAYSIZE(buf), GetPaths()->plugin_ini_file);
+		GetNativeIniString(PLUGIN_INI, CONFIG_APP_NAME, LOOP_COUNT_INI_ENTRY, DEFAULT_LOOP_COUNT, buf, ARRAYSIZE(buf));
 		if (swscanf(buf, L"%lf%n", &loop_count, &consumed) != 1 || consumed != wcslen(buf) || loop_count < 0) {
 			(void)swscanf(DEFAULT_LOOP_COUNT, L"%lf", &loop_count);
 		}
 
-		loop_forever = GetPrivateProfileInt(CONFIG_APP_NAME, LOOP_FOREVER_INI_ENTRY, DEFAULT_LOOP_FOREVER, GetPaths()->plugin_ini_file);
-		ignore_loop = GetPrivateProfileInt(CONFIG_APP_NAME, IGNORE_LOOP_INI_ENTRY, DEFAULT_IGNORE_LOOP, GetPaths()->plugin_ini_file);
+		loop_forever = GetNativeIniInt(PLUGIN_INI, CONFIG_APP_NAME, LOOP_FOREVER_INI_ENTRY, DEFAULT_LOOP_FOREVER);
+		ignore_loop = GetNativeIniInt(PLUGIN_INI, CONFIG_APP_NAME, IGNORE_LOOP_INI_ENTRY, DEFAULT_IGNORE_LOOP);
 
 		if (loop_forever && ignore_loop) {
 			_snwprintf(buf, ARRAYSIZE(buf), L"%d", DEFAULT_LOOP_FOREVER);
@@ -342,20 +349,20 @@ void read_config() {
 			ignore_loop = DEFAULT_IGNORE_LOOP;
 		}
 
-		disable_subsongs = GetPrivateProfileInt(CONFIG_APP_NAME, DISABLE_SUBSONGS_INI_ENTRY,
-												DEFAULT_DISABLE_SUBSONGS, GetPaths()->plugin_ini_file);
+		disable_subsongs = GetNativeIniInt(PLUGIN_INI, CONFIG_APP_NAME, DISABLE_SUBSONGS_INI_ENTRY, DEFAULT_DISABLE_SUBSONGS);
 
-		downmix_channels = GetPrivateProfileInt(CONFIG_APP_NAME, DOWNMIX_CHANNELS_INI_ENTRY,
-												DEFAULT_DOWNMIX_CHANNELS, GetPaths()->plugin_ini_file);
+		downmix_channels = GetNativeIniInt(PLUGIN_INI, CONFIG_APP_NAME, DOWNMIX_CHANNELS_INI_ENTRY, DEFAULT_DOWNMIX_CHANNELS);
 		if (downmix_channels < 0) {
 			_snwprintf(buf, ARRAYSIZE(buf), L"%d", DEFAULT_DOWNMIX_CHANNELS);
-			WritePrivateProfileString(CONFIG_APP_NAME, DOWNMIX_CHANNELS_INI_ENTRY,
-									  buf, GetPaths()->plugin_ini_file);
+			SaveNativeIniString(PLUGIN_INI, CONFIG_APP_NAME,
+								DOWNMIX_CHANNELS_INI_ENTRY, buf);
 			downmix_channels = DEFAULT_DOWNMIX_CHANNELS;
 		}
 
-		tagfile_disable = GetPrivateProfileInt(CONFIG_APP_NAME, DISABLE_TAGFILE_INI_ENTRY,
-											   DEFAULT_TAGFILE_DISABLE, GetPaths()->plugin_ini_file);
+		tagfile_disable = GetNativeIniInt(PLUGIN_INI, CONFIG_APP_NAME, DISABLE_TAGFILE_INI_ENTRY, DEFAULT_TAGFILE_DISABLE);
+		
+		exts_unknown_on = GetNativeIniInt(PLUGIN_INI, CONFIG_APP_NAME, EXTS_UNKNOWN_ON, DEFAULT_EXTS_UNKNOWN_ON);
+		exts_common_on = GetNativeIniInt(PLUGIN_INI, CONFIG_APP_NAME, EXTS_COMMON_ON, DEFAULT_EXTS_COMMON_ON);
 	}
 }
 
@@ -398,6 +405,12 @@ INT_PTR CALLBACK configDlgProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lPara
 
 				if (tagfile_disable)
 					CheckDlgButton(hDlg, IDC_TAGFILE_DISABLE, BST_CHECKED);
+
+				if (exts_unknown_on)
+					CheckDlgButton(hDlg, IDC_EXTS_UNKNOWN_ON, BST_CHECKED);
+
+				if (exts_common_on)
+					CheckDlgButton(hDlg, IDC_EXTS_COMMON_ON, BST_CHECKED);
 			}
             break;
         case WM_COMMAND:
@@ -449,23 +462,23 @@ INT_PTR CALLBACK configDlgProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lPara
 
                         fade_seconds = temp_fade_seconds;
                         _snwprintf(buf, ARRAYSIZE(buf), L"%.2lf", fade_seconds);
-						WritePrivateProfileString(CONFIG_APP_NAME, FADE_SECONDS_INI_ENTRY,
-												  buf, GetPaths()->plugin_ini_file);
+						SaveNativeIniString(PLUGIN_INI, CONFIG_APP_NAME,
+											FADE_SECONDS_INI_ENTRY, buf);
 
                         fade_delay_seconds = temp_fade_delay_seconds;
                         _snwprintf(buf, ARRAYSIZE(buf), L"%.2lf", fade_delay_seconds);
-						WritePrivateProfileString(CONFIG_APP_NAME, FADE_DELAY_SECONDS_INI_ENTRY,
-												  buf, GetPaths()->plugin_ini_file);
+						SaveNativeIniString(PLUGIN_INI, CONFIG_APP_NAME,
+											FADE_DELAY_SECONDS_INI_ENTRY, buf);
 
                         loop_count = temp_loop_count;
                         _snwprintf(buf, ARRAYSIZE(buf), L"%.2lf", loop_count);
-						WritePrivateProfileString(CONFIG_APP_NAME, LOOP_COUNT_INI_ENTRY,
-												  buf, GetPaths()->plugin_ini_file);
+						SaveNativeIniString(PLUGIN_INI, CONFIG_APP_NAME,
+											LOOP_COUNT_INI_ENTRY, buf);
 
                         downmix_channels = temp_downmix_channels;
                         _snwprintf(buf, ARRAYSIZE(buf), L"%d", downmix_channels);
-                        WritePrivateProfileString(CONFIG_APP_NAME, DOWNMIX_CHANNELS_INI_ENTRY,
-												  buf, GetPaths()->plugin_ini_file);
+						SaveNativeIniString(PLUGIN_INI, CONFIG_APP_NAME,
+											DOWNMIX_CHANNELS_INI_ENTRY, buf);
                     }
 					/* pass through */
                 case IDCANCEL:
@@ -480,13 +493,13 @@ INT_PTR CALLBACK configDlgProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lPara
 						wchar_t buf[256] = {0};
                         loop_forever = (IsDlgButtonChecked(hDlg, IDC_LOOP_FOREVER) == BST_CHECKED);
                         _snwprintf(buf, ARRAYSIZE(buf), L"%d", loop_forever);
-						WritePrivateProfileString(CONFIG_APP_NAME, LOOP_FOREVER_INI_ENTRY,
-												  buf, GetPaths()->plugin_ini_file);
+						SaveNativeIniString(PLUGIN_INI, CONFIG_APP_NAME,
+											LOOP_FOREVER_INI_ENTRY, buf);
 
                         ignore_loop = (IsDlgButtonChecked(hDlg, IDC_IGNORE_LOOP) == BST_CHECKED);
                         _snwprintf(buf, ARRAYSIZE(buf), L"%d", ignore_loop);
-						WritePrivateProfileString(CONFIG_APP_NAME, IGNORE_LOOP_INI_ENTRY,
-												  buf, GetPaths()->plugin_ini_file);
+						SaveNativeIniString(PLUGIN_INI, CONFIG_APP_NAME,
+											IGNORE_LOOP_INI_ENTRY, buf);
 						break;
 					}
 				case IDC_DISABLE_SUBSONGS:
@@ -494,8 +507,8 @@ INT_PTR CALLBACK configDlgProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lPara
 						wchar_t buf[256] = {0};
 						disable_subsongs = (IsDlgButtonChecked(hDlg, IDC_DISABLE_SUBSONGS) == BST_CHECKED);
                         _snwprintf(buf, ARRAYSIZE(buf), L"%d", disable_subsongs);
-						WritePrivateProfileString(CONFIG_APP_NAME, DISABLE_SUBSONGS_INI_ENTRY,
-												  buf, GetPaths()->plugin_ini_file);
+						SaveNativeIniString(PLUGIN_INI, CONFIG_APP_NAME,
+											DISABLE_SUBSONGS_INI_ENTRY, buf);
 						break;
 					}
 				case IDC_TAGFILE_DISABLE:
@@ -503,8 +516,26 @@ INT_PTR CALLBACK configDlgProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lPara
 						wchar_t buf[256] = {0};
 						tagfile_disable = (IsDlgButtonChecked(hDlg, IDC_TAGFILE_DISABLE) == BST_CHECKED);
                         _snwprintf(buf, ARRAYSIZE(buf), L"%d", tagfile_disable);
-						WritePrivateProfileString(CONFIG_APP_NAME, DISABLE_TAGFILE_INI_ENTRY,
-												  buf, GetPaths()->plugin_ini_file);
+						SaveNativeIniString(PLUGIN_INI, CONFIG_APP_NAME,
+											DISABLE_TAGFILE_INI_ENTRY, buf);
+						break;
+					}
+				case IDC_EXTS_UNKNOWN_ON:
+					{
+						wchar_t buf[256] = {0};
+						exts_unknown_on = (IsDlgButtonChecked(hDlg, IDC_EXTS_UNKNOWN_ON) == BST_CHECKED);
+                        _snwprintf(buf, ARRAYSIZE(buf), L"%d", exts_unknown_on);
+						SaveNativeIniString(PLUGIN_INI, CONFIG_APP_NAME,
+											EXTS_UNKNOWN_ON, buf);
+						break;
+					}
+				case IDC_EXTS_COMMON_ON:
+					{
+						wchar_t buf[256] = {0};
+						exts_common_on = (IsDlgButtonChecked(hDlg, IDC_EXTS_COMMON_ON) == BST_CHECKED);
+                        _snwprintf(buf, ARRAYSIZE(buf), L"%d", exts_common_on);
+						SaveNativeIniString(PLUGIN_INI, CONFIG_APP_NAME,
+											EXTS_COMMON_ON, buf);
 						break;
 					}
                 case IDC_DEFAULT_BUTTON:
@@ -523,8 +554,11 @@ INT_PTR CALLBACK configDlgProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lPara
 
 						CheckDlgButton(hDlg, IDC_TAGFILE_DISABLE, BST_UNCHECKED);
 
+						CheckDlgButton(hDlg, IDC_EXTS_UNKNOWN_ON, BST_UNCHECKED);
+						CheckDlgButton(hDlg, IDC_EXTS_COMMON_ON, BST_UNCHECKED);
+
 						// physically remove the section from the ini file as it's quicker
-						WritePrivateProfileString(CONFIG_APP_NAME, 0, 0, GetPaths()->plugin_ini_file);
+						SaveNativeIniString(PLUGIN_INI, CONFIG_APP_NAME, 0, 0);
 						break;
 					}
                 default:
@@ -803,10 +837,19 @@ int isourfile(const in_char *fn) {
     else
         extension++;
 
-    /* returning 0 here means it only accepts the extensions in working_extension_list */
-    /* it's possible to ignore the list and manually accept extensions, like foobar's g_is_our_path */
+	vgmstream_ctx_valid_cfg cfg = {0};
+    cfg.skip_standard = 1; /* validated by Winamp */
+    cfg.accept_unknown = exts_unknown_on;
+    cfg.accept_common = exts_common_on;
 
-    return 0;
+    /* Winamp seem to have bizarre handling of MP3 without standard names (ex song.mp3a),
+     * in that it'll try to open normally, rejected if unknown_exts_on is not set, and
+     * finally retry with "hi.mp3", accepted if exts_common_on is set. */
+
+    /* returning 0 here means it only accepts the extensions in working_extension_list */
+	char filename_utf8[PATH_LIMIT];
+	wa_wchar_to_char(filename_utf8, PATH_LIMIT, fn);
+	return vgmstream_ctx_is_valid(filename_utf8, &cfg);
 }
 
 /* request to start playing a file */
@@ -914,9 +957,10 @@ void stop() {
     if (decode_thread_handle != INVALID_HANDLE_VALUE) {
         decode_abort = 1;
 
-        /* arbitrary wait length */
-        if (WaitForSingleObject(decode_thread_handle, 1000) == WAIT_TIMEOUT) {
-            TerminateThread(decode_thread_handle, 0); // TODO: error?
+        /* arbitrary wait milliseconds (error can trigger if the system is *really* busy) */
+        if (WaitForSingleObject(decode_thread_handle, 5000) == WAIT_TIMEOUT) {
+            MessageBox(plugin.hMainWindow, TEXT("Error stopping decode thread\n"), TEXT("Error"),MB_OK|MB_ICONERROR);
+            TerminateThread(decode_thread_handle, 0);
         }
         CloseHandle(decode_thread_handle);
         decode_thread_handle = INVALID_HANDLE_VALUE;
@@ -1379,6 +1423,16 @@ get_length:
         }
     }
 
+    /* if tagfile exists but TITLE doesn't Winamp won't default to GetFileInfo, so call it
+     * manually as it's useful for files with stream names */
+    if (!tag_found && strcasecmp(metadata, "title") == 0) {
+        in_char ret_wchar[2048] = {0};
+
+		getfileinfo(filename, ret_wchar, NULL);
+		wa_wchar_to_char(ret, retlen, ret_wchar);
+        return 1;
+    }
+
     if (!tag_found)
         goto fail;
 
@@ -1691,7 +1745,7 @@ extern "C" __declspec(dllexport) int winampUninstallPlugin(HINSTANCE hDllInst, H
 	// prompt to remove our settings with default as no (just incase)
 	/*if (MessageBox( hwndDlg, WASABI_API_LNGSTRINGW( IDS_UNINSTALL_SETTINGS_PROMPT ),
 				    pluginTitle, MB_YESNO | MB_DEFBUTTON2 ) == IDYES ) {
-		WritePrivateProfileString(CONFIG_APP_NAME, 0, 0, GetPaths()->plugin_ini_file);
+		SaveNativeIniString(PLUGIN_INI, CONFIG_APP_NAME, 0, 0);
 	}*/
 
 	// as we're not hooking anything and have no settings we can support an on-the-fly uninstall action

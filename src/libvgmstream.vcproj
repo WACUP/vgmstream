@@ -233,10 +233,6 @@
                     >
                 </File>
                 <File
-                    RelativePath=".\meta\acb_utf.h"
-                    >
-                </File>
-                <File
                     RelativePath=".\meta\9tav_streamfile.h"
                     >
                 </File>
@@ -254,6 +250,18 @@
                 </File>
                 <File
                     RelativePath=".\meta\bgw_streamfile.h"
+                    >
+                </File>
+                <File
+                    RelativePath=".\meta\bnsf_keys.h"
+                    >
+                </File>
+                <File
+                    RelativePath=".\meta\cri_utf.h"
+                    >
+                </File>
+                <File
+                    RelativePath=".\meta\deblock_streamfile.h"
                     >
                 </File>
                 <File
@@ -282,6 +290,10 @@
                 </File>
                 <File
                     RelativePath=".\meta\kma9_streamfile.h"
+                    >
+                </File>
+                <File
+                    RelativePath=".\meta\lrmd_streamfile.h"
                     >
                 </File>
                 <File
@@ -553,6 +565,14 @@
                     >
                 </File>
                 <File
+                    RelativePath=".\meta\cri_utf.c"
+                    >
+                </File>
+                <File
+                    RelativePath=".\meta\csb.c"
+                    >
+                </File>
+                <File
                     RelativePath=".\meta\csmp.c"
                     >
                 </File>
@@ -564,10 +584,14 @@
 					RelativePath=".\meta\dc_asd.c"
 					>
 				</File>
-				<File
-					RelativePath=".\meta\dcs_wav.c"
-					>
-				</File>
+                <File
+                    RelativePath=".\meta\dcs_wav.c"
+                    >
+                </File>
+                <File
+                    RelativePath=".\meta\deblock_streamfile.c"
+                    >
+                </File>
 				<File
 					RelativePath=".\meta\dc_idvi.c"
 					>
@@ -673,6 +697,10 @@
                     >
                 </File>
 				<File
+					RelativePath=".\meta\fwse.c"
+					>
+				</File>
+				<File
 					RelativePath=".\meta\g1l.c"
 					>
 				</File>
@@ -770,6 +798,14 @@
 				</File>
                 <File
                     RelativePath=".\meta\ktss.c"
+                    >
+                </File>
+                <File
+                    RelativePath=".\meta\kwb.c"
+                    >
+                </File>
+                <File
+                    RelativePath=".\meta\lrmd.c"
                     >
                 </File>
 				<File
@@ -1415,6 +1451,10 @@
                     >
                 </File>
                 <File
+                    RelativePath=".\meta\fda.c"
+                    >
+                </File>
+                <File
                     RelativePath=".\meta\ffdl.c"
                     >
                 </File>
@@ -1771,6 +1811,10 @@
                     >
                 </File>
                 <File
+                    RelativePath=".\meta\xma_ue3.c"
+                    >
+                </File>
+                <File
                     RelativePath=".\meta\xnb.c"
                     >
                 </File>
@@ -1852,6 +1896,18 @@
                 </File>
                 <File
                     RelativePath=".\coding\ea_mt_decoder_utk.h"
+                    >
+                </File>
+                <File
+                    RelativePath=".\coding\g7221_decoder_aes.h"
+                    >
+                </File>
+                <File
+                    RelativePath=".\coding\g7221_decoder_lib.h"
+                    >
+                </File>
+                <File
+                    RelativePath=".\coding\g7221_decoder_lib_data.h"
                     >
                 </File>
 				<File
@@ -1958,10 +2014,18 @@
 					RelativePath=".\coding\g721_decoder.c"
 					>
 				</File>
-				<File
-					RelativePath=".\coding\g7221_decoder.c"
-					>
-				</File>
+                <File
+                    RelativePath=".\coding\g7221_decoder.c"
+                    >
+                </File>
+                <File
+                    RelativePath=".\coding\g7221_decoder_aes.c"
+                    >
+                </File>
+                <File
+                    RelativePath=".\coding\g7221_decoder_lib.c"
+                    >
+                </File>
 				<File
 					RelativePath=".\coding\hca_decoder.c"
 					>
@@ -2060,6 +2124,14 @@
                 </File>
                 <File
                     RelativePath=".\coding\ptadpcm_decoder.c"
+                    >
+                </File>
+                <File
+                    RelativePath=".\coding\relic_decoder.c"
+                    >
+                </File>
+                <File
+                    RelativePath=".\coding\relic_decoder_mixfft.c"
                     >
                 </File>
 				<File

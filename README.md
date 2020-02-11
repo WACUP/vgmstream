@@ -18,6 +18,9 @@ Help and newest builds can be found here: https://www.hcs64.com/
 
 Latest development is usually here: https://github.com/losnoco/vgmstream/
 
+Latest releases are here: https://github.com/losnoco/vgmstream/releases
+Automated builds with the latest changes: https://ci.appveyor.com/project/kode54/vgmstream/branch/master/artifacts
+
 You can find further info about other details in https://github.com/losnoco/vgmstream/tree/master/doc
 
 ## Needed extra files (for Windows)
@@ -31,7 +34,6 @@ or you can get them here: https://github.com/losnoco/vgmstream/tree/master/ext_l
 Put the following files somewhere Windows can find them:
 - `libvorbis.dll`
 - `libmpg123-0.dll`
-- `libg7221_decode.dll`
 - `libg719_decode.dll`
 - `avcodec-vgmstream-58.dll`
 - `avformat-vgmstream-58.dll`
@@ -213,11 +215,12 @@ have total samples after those.
 Certain formats have encrypted data, and need a key to decrypt. vgmstream
 will try to find the correct key from a list, but it can be provided by
 a companion file:
-- .adx: .adxkey (keystring, keycode, or derived 6 byte start/mult/add key)
+- .adx: .adxkey (keystring, 8 byte keycode, or derived 6 byte start/mult/add key)
 - .ahx: .ahxkey (derived 6 byte start/mult/add key)
 - .hca: .hcakey (8 byte decryption key, a 64-bit number)
   - May be followed by 2 byte AWB scramble key for newer HCA
 - .fsb: .fsbkey (decryption key, in hex)
+- .bnsf: .bnsfkey (decryption key, a string up to 24 chars)
 
 The key file can be ".(ext)key" (for the whole folder), or "(name).(ext)key"
 (for a single file). The format is made up to suit vgmstream.
@@ -284,6 +287,9 @@ can reduce the number of channels to a playable amount. Note that this type
 of downmixing is very generic, not meant to be used when converting to other
 formats.
 
+You can also choose which channels to play using *TXTP*. For example, create
+a file named `song.adx#C1,2.txtp` to play only channels 1 and 2 from `song.adx`.
+
 ## Tagging
 Some of vgmstream's plugins support simple read-only tagging via external files.
 
@@ -294,12 +300,12 @@ ordering), the file itself just 'looks' like an M3U.
 Format is:
 ```
 # ignored comment
-# $GLOBAL_COMMAND value (extra features)
-# @GLOBAL_TAG value (applies all following tracks)
+# $GLOBAL_COMMAND (extra features)
+# @GLOBAL_TAG text (applies all following tracks)
 
-# %LOCAL_TAG value (applies to next track only)
+# %LOCAL_TAG text (applies to next track only)
 filename1
-# %LOCAL_TAG value (applies to next track only)
+# %LOCAL_TAG text (applies to next track only)
 filename2
 ```
 Accepted tags depend on the player (foobar: any; winamp: see ATF config),
@@ -314,6 +320,16 @@ Playlist formatting should follow player's config. ASCII or UTF-8 tags work.
 - *AUTOTRACK*: sets *%TRACK* tag automatically (1..N as files are encountered
   in the tag file).
 - *AUTOALBUM*: sets *%ALBUM* tag automatically using the containing dir as album.
+
+Some players like foobar accept tags with spaces. To use them surround the tag
+with both characters.
+```
+# @GLOBAL TAG WITH SPACES@ text
+# ...
+# %LOCAL TAG WITH SPACES% text
+filename1
+```
+As a side effect if text has @/% inside you also need them: `# @ALBUMARTIST@ Tom-H@ck`
 
 Note that since you can use global tags don't need to put all files inside.
 This would be a perfectly valid *!tags.m3u*:
@@ -414,6 +430,7 @@ are used in few games.
 - Circus XPCM ADPCM
 - OKI 4-bit ADPCM (16-bit output, 4-shift, PC-FX)
 - Ubisoft 4/6-bit ADPCM
+- Tiger Game.com ADPCM
 - SDX2 2:1 Squareroot-Delta-Exact compression DPCM
 - CBD2 2:1 Cuberoot-Delta-Exact compression DPCM
 - Activision EXAKT SASSC DPCM
@@ -421,11 +438,12 @@ are used in few games.
 - InterPlay ACM
 - VisualArt's NWA
 - Electronic Arts MicroTalk a.k.a. UTK or UMT
+- Relic Codec
 - CRI HCA
 - Xiph Vorbis (Ogg, FSB5, Wwise, OGL, Silicon Knights)
 - MPEG MP1/2/3 (standard, AHX, XVAG, FSB, AWC, P3D, etc)
 - ITU-T G.722.1 annex C (Polycom Siren 14)
-- ITU G.719 annex B (Polycom Siren 22)
+- ITU-T G.719 annex B (Polycom Siren 22)
 - Electronic Arts EALayer3
 - Electronic Arts EA-XMA
 - Sony ATRAC3, ATRAC3plus
@@ -688,10 +706,11 @@ This list is not complete and many other files are supported.
 	- .sfl (loop info for .ogg)
 	- .vgmstream + .vgmstream.pos (FFmpeg formats + loop assist)
 - other:
-	- .adxkey (decryption key for .adx, in start/mult/add format)
-	- .ahxkey (decryption key for .ahx, in start/mult/add format)
-    - .hcakey (decryption key for .hca, in HCA Decoder format)
-    - .fsbkey (decryption key for .fsb, in hex)
+	- .adxkey (decryption key for .adx)
+	- .ahxkey (decryption key for .ahx)
+    - .hcakey (decryption key for .hca)
+    - .fsbkey (decryption key for .fsb)
+    - .bnsfkey (decryption key for .bnsf)
     - .txtp (per song segment/layer handler and player configurator)
 
 Enjoy! *hcs*

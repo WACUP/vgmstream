@@ -306,6 +306,30 @@ static const hcakey_info hcakey_list[] = {
         /* Nogizaka46 Rhythm Festival (Android) */
         {5613126134333697},         // 0013F11BC5510101
 
+        /* IDOLiSH7 (Android) */
+        {8548758374946935437},      // 76A34A72E15B928D
+
+        /* Phantom of the Kill (Android) */
+        {33624594140214547},        // 00777563E571B513
+
+        /* Dankira!!! Boys, be DANCING! (Android) */
+        {3957325206121219506},      // 36EB3E4EE38E05B2
+
+        /* Idola: Phantasy Star Saga (Android) */
+        {0xA86BF72B4C852CA7},       // A86BF72B4C852CA7 / 12136065386219383975
+
+        /* Arca Last (Android) */
+        {612310807},                // 00000000247F1F17
+
+        /* ArkResona (Android) */
+        {564321654321},             // 0000008364311631
+
+        /* Kemono Friends 3 (Android) */
+        {3315495188},               // 00000000C59E7114
+
+        /* Inazuma Eleven SD (Android) */
+        {0xC436E03737D55B5F},       // C436E03737D55B5F / 14138734607940803423
+
         /* Dragalia Lost (iOS/Android) */
         {2967411924141,         subkeys_dgl, sizeof(subkeys_dgl) / sizeof(subkeys_dgl[0]) },    // 000002B2E7889CAD
 

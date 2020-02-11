@@ -16,6 +16,7 @@ enum { VGMSTREAM_MAX_CHANNELS = 64 };
 enum { VGMSTREAM_MIN_SAMPLE_RATE = 300 }; /* 300 is Wwise min */
 enum { VGMSTREAM_MAX_SAMPLE_RATE = 192000 }; /* found in some FSB5 */
 enum { VGMSTREAM_MAX_SUBSONGS = 65535 };
+enum { VGMSTREAM_MAX_NUM_SAMPLES = 1000000000 }; /* no ~5h vgm hopefully */
 
 #include "streamfile.h"
 
@@ -39,10 +40,6 @@ enum { VGMSTREAM_MAX_SUBSONGS = 65535 };
 
 #ifdef VGM_USE_MPEG
 #include <mpg123.h>
-#endif
-
-#ifdef VGM_USE_G7221
-#include <g7221.h>
 #endif
 
 #ifdef VGM_USE_MP4V2
@@ -146,6 +143,7 @@ typedef enum {
     coding_AWC_IMA,         /* Rockstar AWC IMA ADPCM */
     coding_UBI_IMA,         /* Ubisoft IMA ADPCM */
     coding_H4M_IMA,         /* H4M IMA ADPCM (stereo or mono, high nibble first) */
+    coding_MTF_IMA,         /* Capcom MT Framework IMA ADPCM */
 
     coding_MSADPCM,         /* Microsoft ADPCM (stereo/mono) */
     coding_MSADPCM_int,     /* Microsoft ADPCM (mono) */
@@ -156,6 +154,8 @@ typedef enum {
     coding_AICA_int,        /* Yamaha AICA ADPCM (mono/interleave) */
     coding_ASKA,            /* Aska ADPCM */
     coding_NXAP,            /* NXAP ADPCM */
+
+    coding_TGC,             /* Tiger Game.com 4-bit ADPCM */
 
     coding_NDS_PROCYON,     /* Procyon Studio ADPCM */
     coding_L5_555,          /* Level-5 0x555 ADPCM */
@@ -186,6 +186,7 @@ typedef enum {
 
     coding_EA_MT,           /* Electronic Arts MicroTalk (linear-predictive speech codec) */
 
+    coding_RELIC,           /* Relic Codec (DCT-based) */
     coding_CRI_HCA,         /* CRI High Compression Audio (MDCT-based) */
 
 #ifdef VGM_USE_VORBIS
@@ -439,7 +440,7 @@ typedef enum {
     meta_WII_SNG,           /* Excite Trucks */
     meta_MUL,
     meta_SAT_BAKA,          /* Crypt Killer */
-    meta_PS2_VSF,           /* Musashi: Samurai Legend */
+    meta_VSF,
     meta_PS2_VSF_TTA,       /* Tiny Toon Adventures: Defenders of the Universe */
     meta_ADS,               /* Gauntlet Dark Legends (GC) */
     meta_PS2_SPS,           /* Ape Escape 2 */
@@ -720,7 +721,12 @@ typedef enum {
     meta_BMP_KONAMI,
     meta_ISB,
     meta_XSSB,
-
+    meta_XMA_UE3,
+    meta_FWSE,
+    meta_FDA,
+    meta_TGC,
+    meta_KWB,
+    meta_LRMD,
 } meta_t;
 
 /* standard WAVEFORMATEXTENSIBLE speaker positions */
@@ -1080,10 +1086,7 @@ typedef struct {
 #endif
 
 #ifdef VGM_USE_G7221
-typedef struct {
-    sample_t buffer[640];
-    g7221_handle *handle;
-} g7221_codec_data;
+typedef struct g7221_codec_data g7221_codec_data;
 #endif
 
 #ifdef VGM_USE_G719
@@ -1148,6 +1151,7 @@ typedef struct {
     NWAData *nwa;
 } nwa_codec_data;
 
+typedef struct relic_codec_data relic_codec_data;
 
 typedef struct {
     STREAMFILE *streamfile;
