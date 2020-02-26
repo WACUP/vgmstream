@@ -54,10 +54,10 @@
 #endif
 
 #ifndef VERSIONW
-#define VERSIONW L"2.1.2797"
+#define VERSIONW L"2.1.2800"
 #endif
 
-#define LIBVGMSTREAM_BUILD "1050-2797-g5ea57c08-wacup"
+#define LIBVGMSTREAM_BUILD "1050-2800-g24e9d177-wacup"
 #define APP_NAME "vgmstream plugin"
 #define PLUGIN_DESCRIPTION "vgmstream Decoder v" VERSION
 #define PLUGIN_DESCRIPTIONW L"vgmstream Decoder v" VERSIONW
@@ -769,7 +769,7 @@ void about(HWND hwndParent)
 {
 	// TODO need to ensure that we keep the build # correct
     AboutMessageBox(hwndParent, PLUGIN_DESCRIPTIONW L"\n\n"
-					L"Copyright © 2008-2019 hcs, FastElbja, manakoAT, bxaimc,\n"
+					L"Copyright © 2008-2020 hcs, FastElbja, manakoAT, bxaimc,\n"
 					L"snakemeat, soneek, kode54, bnnm and all other contributors.\n\n"
 					L"WACUP integration updates by Darren Owen aka DrO\n\n"
 					L"Build date: " TEXT(__DATE__) L"\n\n"
@@ -818,6 +818,8 @@ void quit() {
 
 /* called before extension checks, to allow detection of mms://, etc */
 int isourfile(const in_char *fn) {
+	if (!PathIsURL(fn))
+	{
     const in_char *filename;
     const in_char *extension;
 
@@ -850,6 +852,8 @@ int isourfile(const in_char *fn) {
 	char filename_utf8[PATH_LIMIT];
 	wa_wchar_to_char(filename_utf8, PATH_LIMIT, fn);
 	return vgmstream_ctx_is_valid(filename_utf8, &cfg);
+}
+	return 0;
 }
 
 /* request to start playing a file */
