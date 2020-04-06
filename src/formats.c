@@ -64,6 +64,7 @@ static const char* extension_list[] = {
     "akb",
     "al",
     "al2",
+    "ams", //txth/reserved [Super Dragon Ball Z (PS2) ELF names]
     "amts", //fake extension/header id for .stm (renamed? to be removed?)
     "ao",
     "apc",
@@ -452,6 +453,7 @@ static const char* extension_list[] = {
     "snr",
     "sns",
     "snu",
+    "snz", //txth/reserved [Killzone HD (PS3)]
     "sod",
     "son",
     "spd",
@@ -460,6 +462,7 @@ static const char* extension_list[] = {
     "spsd",
     "spw",
     "ss2",
+    "ssd", //txth/reserved [Zack & Wiki (Wii)]
     "ssm",
     "sss",
     "ster",
@@ -724,7 +727,6 @@ static const coding_info coding_info_list[] = {
         {coding_REF_IMA,            "Reflections 4-bit IMA ADPCM"},
         {coding_AWC_IMA,            "Rockstar AWC 4-bit IMA ADPCM"},
         {coding_UBI_IMA,            "Ubisoft 4-bit IMA ADPCM"},
-
         {coding_H4M_IMA,            "Hudson HVQM4 4-bit IMA ADPCM"},
 
         {coding_MSADPCM,            "Microsoft 4-bit ADPCM"},
@@ -847,6 +849,7 @@ static const layout_info layout_info_list[] = {
         {layout_blocked_xa_aiff,        "blocked (XA AIFF)"},
         {layout_blocked_vs_square,      "blocked (Square VS)"},
         {layout_blocked_vid1,           "blocked (VID1)"},
+        {layout_blocked_ubi_sce,        "blocked (Ubi SCE)"},
 };
 
 static const meta_info meta_info_list[] = {
@@ -1281,6 +1284,7 @@ static const meta_info meta_info_list[] = {
         {meta_TGC,                  "Tiger Game.com .4 header"},
         {meta_KWB,                  "Koei Tecmo WaveBank header"},
         {meta_LRMD,                 "Sony LRMD header"},
+        {meta_WWISE_FX,             "Audiokinetic Wwise FX header"},
 
 };
 

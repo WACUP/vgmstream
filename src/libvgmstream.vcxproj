@@ -126,6 +126,7 @@
     <ClInclude Include="meta\xnb_streamfile.h" />
     <ClInclude Include="meta\xnb_lz4mg.h" />
     <ClInclude Include="meta\mta2_streamfile.h" />
+    <ClInclude Include="meta\mul_streamfile.h" />
     <ClInclude Include="meta\mzrt_streamfile.h" />
     <ClInclude Include="meta\nus3bank_streamfile.h" />
     <ClInclude Include="meta\ogg_vorbis_streamfile.h" />
@@ -176,6 +177,7 @@
     <ClCompile Include="layout\blocked_vs_str.c" />
     <ClCompile Include="layout\layered.c" />
     <ClCompile Include="layout\blocked_tra.c" />
+    <ClCompile Include="layout\blocked_ubi_sce.c" />
     <ClCompile Include="meta\akb.c" />
     <ClCompile Include="meta\awb.c" />
     <ClCompile Include="meta\awc.c" />
@@ -313,6 +315,7 @@
     <ClCompile Include="meta\ea_eaac.c" />
     <ClCompile Include="meta\ea_wve_au00.c" />
     <ClCompile Include="meta\ea_wve_ad10.c" />
+    <ClCompile Include="meta\encrypted.c" />
     <ClCompile Include="meta\mul.c" />
     <ClCompile Include="meta\exakt_sc.c" />
     <ClCompile Include="meta\ffw.c" />
