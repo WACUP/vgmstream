@@ -87,8 +87,8 @@ END
 //
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 2,1,2861,0
- PRODUCTVERSION 2,1,2861,0
+ FILEVERSION 2,1,2893,0
+ PRODUCTVERSION 2,1,2893,0
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -105,12 +105,12 @@ BEGIN
         BEGIN
             VALUE "CompanyName", "WACUP (WinAmp Community Update Project)"
             VALUE "FileDescription", "Winamp Input Plug-in"
-            VALUE "FileVersion", "2.1.2861.0"
+            VALUE "FileVersion", "2.1.2893.0"
             VALUE "InternalName", "in_vgmstream.dll"
             VALUE "LegalCopyright", "Copyright © 2008-2020 Halley's Comet Software + Contributors"
             VALUE "OriginalFilename", "in_vgmstream.dll"
             VALUE "ProductName", "vgmstream Decoder"
-            VALUE "ProductVersion", "2.1.2861.0"
+            VALUE "ProductVersion", "2.1.2893.0"
         END
     END
     BLOCK "VarFileInfo"

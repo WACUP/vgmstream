@@ -54,10 +54,10 @@
 #endif
 
 #ifndef VERSIONW
-#define VERSIONW L"2.1.2861"
+#define VERSIONW L"2.1.2893"
 #endif
 
-#define LIBVGMSTREAM_BUILD "1050-2861-g126e3b41-wacup"
+#define LIBVGMSTREAM_BUILD "1050-2893-g994ef884-wacup"
 #define APP_NAME "vgmstream plugin"
 #define PLUGIN_DESCRIPTION "vgmstream Decoder v" VERSION
 #define PLUGIN_DESCRIPTIONW L"vgmstream Decoder v" VERSIONW
@@ -869,7 +869,7 @@ int play(const in_char *fn) {
 
     /* check for info encoded in the filename */
     parse_fn_string(fn, NULL, filename, PATH_LIMIT);
-    parse_fn_int(fn, L"$s", &stream_index);
+    parse_fn_int(filename, L"$s", &stream_index);
 
     /* open the stream */
     vgmstream = init_vgmstream_winamp(filename, stream_index);
@@ -893,10 +893,10 @@ int play(const in_char *fn) {
 
 
     /* save original name */
-    wcsncpy(lastfn, fn, PATH_LIMIT);
+    wcsncpy(lastfn, filename, PATH_LIMIT);
 
     /* open the output plugin */
-    max_latency = plugin.outMod->Open(vgmstream->sample_rate, output_channels, 16, 0, 0);
+    max_latency = (plugin.outMod ? plugin.outMod->Open(vgmstream->sample_rate, output_channels, 16, -1, -1) : -1);
 
     if (max_latency < 0) {
         close_vgmstream(vgmstream);

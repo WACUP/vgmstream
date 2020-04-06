@@ -12,7 +12,6 @@ void decode_asf(VGMSTREAMCHANNEL *stream, sample_t *outbuf, int channelspacing, 
     int32_t hist1 = stream->adpcm_history1_32;
     int32_t hist2 = stream->adpcm_history2_32;
 
-
     /* external interleave (fixed size), mono */
     bytes_per_frame = 0x11;
     samples_per_frame = (bytes_per_frame - 0x01) * 2;

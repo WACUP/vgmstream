@@ -26,6 +26,7 @@ typedef struct {
     size_t stream_size;
     uint16_t extradata_id;
 
+
     off_t  filename_offset;
     size_t filename_size;
     off_t  muscname_offset;
