@@ -54,10 +54,10 @@
 #endif
 
 #ifndef VERSIONW
-#define VERSIONW L"2.1.2893"
+#define VERSIONW L"2.1.2908"
 #endif
 
-#define LIBVGMSTREAM_BUILD "1050-2893-g994ef884-wacup"
+#define LIBVGMSTREAM_BUILD "1050-2893-g14dc8566-wacup"
 #define APP_NAME "vgmstream plugin"
 #define PLUGIN_DESCRIPTION "vgmstream Decoder v" VERSION
 #define PLUGIN_DESCRIPTIONW L"vgmstream Decoder v" VERSIONW
@@ -122,6 +122,7 @@ int decode_pos_samples = 0;
 int stream_length_samples = 0;
 int fade_samples = 0;
 int output_channels = 0;
+double volume = 1.0;
 
 const wchar_t* tagfile_name = L"!tags.m3u"; //todo make configurable
 
@@ -160,7 +161,7 @@ static FILE* wa_fdopen(int fd) {
 typedef struct {
     STREAMFILE sf;
     STREAMFILE *stdiosf;
-    FILE *infile_ref; /* pointer to the infile in stdiosf */
+	FILE *infile_ref; /* pointer to the infile in stdiosf (partially handled by stdiosf) */
 } WINAMP_STREAMFILE;
 
 static STREAMFILE *open_winamp_streamfile_by_file(FILE *infile, const char * path);
@@ -288,18 +289,6 @@ static VGMSTREAM* init_vgmstream_winamp(const in_char *fn, int stream_index) {
 /* ************************************* */
 /* IN_CONFIG                             */
 /* ************************************* */
-
-#ifndef UNICODE_INPUT_PLUGIN
-/* converts from utf8 to utf16 (if unicode is active) */
-static void cfg_char_to_wchar(TCHAR *wdst, size_t wdstsize, const char *src) {
-#ifdef UNICODE
-    //int size_needed = MultiByteToWideChar(CP_UTF8,0, src,-1, NULL,0);
-    MultiByteToWideChar(CP_UTF8,0, src,-1, wdst,wdstsize);
-#else
-    strcpy(wdst,src);
-#endif
-}
-#endif
 
 /* config */
 #define CONFIG_APP_NAME TEXT("vgmstream plugin")
@@ -650,7 +639,8 @@ static int parse_fn_int(const in_char * fn, const in_char * tag, int * num) {
     if (start > 0) {
         swscanf(start + 1, L"$s=%i ", num);
         return 1;
-    } else {
+	}
+	else {
         *num = 0;
         return 0;
     }
@@ -758,6 +748,56 @@ static void get_title(in_char * dst, int dst_size, const in_char * fn, VGMSTREAM
         _snwprintf(buffer, PATH_LIMIT, L" (%s)", stream_name);
         wcscat(dst, buffer);
     }
+}
+
+static int winampGetExtendedFileInfo_common(in_char* filename, char *metadata, char* ret, int retlen);
+
+static double get_album_gain_volume(const in_char *fn) {
+	// this needs to be gone through & compared to
+	// what is wanted as this doesn't match up to
+	// the api_config that the other plug-ins use
+#if 0
+    char replaygain[64];
+    double gain = 0.0;
+    int had_replaygain = 0;
+	const int gain_type = plugin.config->GetUnsigned(playbackConfigGroupGUID, L"replaygain_source", 0);
+
+    replaygain[0] = '\0'; /* reset each time to make sure we read actual tags */
+	if (gain_type == 1	// album
+            && winampGetExtendedFileInfo_common((in_char *)fn, "replaygain_album_gain", replaygain, sizeof(replaygain))
+            && replaygain[0] != '\0') {
+        gain = atof(replaygain);
+        had_replaygain = 1;
+    }
+
+    replaygain[0] = '\0';
+    if (!had_replaygain
+            && winampGetExtendedFileInfo_common((in_char *)fn, "replaygain_track_gain", replaygain, sizeof(replaygain))
+            && replaygain[0] != '\0') {
+        gain = atof(replaygain);
+        had_replaygain = 1;
+    }
+
+    if (had_replaygain) {
+        double vol = pow(10.0, gain / 20.0);
+        double peak = 1.0;
+
+        replaygain[0] = '\0';
+		const int clip_type = plugin.config->GetUnsigned(playbackConfigGroupGUID, L"replaygain_mode", 1);
+		if (settings.clip_type == 1	// album
+                && winampGetExtendedFileInfo_common((in_char *)fn, "replaygain_album_peak", replaygain, sizeof(replaygain))
+                && replaygain[0] != '\0') {
+            peak = atof(replaygain);
+        }
+		else if (settings.clip_type == 0	// track
+                && winampGetExtendedFileInfo_common((in_char *)fn, "replaygain_track_peak", replaygain, sizeof(replaygain))
+                && replaygain[0] != '\0') {
+            peak = atof(replaygain);
+        }
+        return peak != 1.0 ? min(vol, 1.0 / peak) : vol;
+    }
+#endif
+    return 1.0;
 }
 
 
@@ -912,14 +952,14 @@ int play(const in_char *fn) {
     plugin.VSASetInfo(vgmstream->sample_rate, output_channels);
 
     /* reset internals */
+	paused = 0;
     decode_abort = 0;
     seek_needed_samples = -1;
     decode_pos_ms = 0;
     decode_pos_samples = 0;
-    paused = 0;
     stream_length_samples = get_vgmstream_play_samples(loop_count, fade_seconds, fade_delay_seconds, vgmstream);
-
     fade_samples = (int)(fade_seconds * vgmstream->sample_rate);
+	volume = get_album_gain_volume(filename);
 
     /* start */
     decode_thread_handle = CreateThread(NULL,   /* handle cannot be inherited */
@@ -1443,7 +1483,9 @@ get_length:
     return 1;
 
 fail:
-    return 0;
+    //TODO: is this always needed for Winamp to use replaygain?
+    //strcpy(ret, "1.0"); //should set some default value?
+    return strcasecmp(metadata, "replaygain_track_gain") == 0 ? 1 : 0;
 }
 
 extern "C" __declspec(dllexport) int winampGetExtendedFileInfoW(wchar_t *filename, char *metadata, wchar_t *ret, int retlen)
@@ -1580,6 +1622,7 @@ int ext_decode_pos_samples = 0;
 int ext_stream_length_samples = -1;
 int ext_fade_samples = 0;
 int ext_output_channels = 0;
+double ext_volume = 1.0;
 
 extern "C" __declspec(dllexport) intptr_t winampGetExtendedRead_openW(const wchar_t *fn, int *size, int *bps, int *nch, int *srate)
 {
@@ -1612,6 +1655,7 @@ extern "C" __declspec(dllexport) intptr_t winampGetExtendedRead_openW(const wcha
 	ext_decode_pos_samples = 0;
 	ext_stream_length_samples = get_vgmstream_play_samples(loop_count, fade_seconds, fade_delay_seconds, ext_vgmstream);
 	ext_fade_samples = (int)(fade_seconds * ext_vgmstream->sample_rate);
+	ext_volume = 1.0; /* unused */
 
 	if (size) {
 		*size = ext_stream_length_samples * ext_output_channels * 2;
@@ -1717,6 +1761,7 @@ extern "C" __declspec(dllexport) size_t winampGetExtendedRead_getData(intptr_t h
 			ext_decode_pos_samples += samples_to_do;
 		}
 
+		/* check decoding cancelled */
 		if (killswitch && *killswitch) {
 			break;
 		}
@@ -1786,7 +1831,8 @@ FARPROC WINAPI FailHook(unsigned dliNotify, PDelayLoadInfo pdli) {
 				PathAppend(filepath, filename);
 				module = LoadLibrary(filepath);
 			}
-		} else {
+		}
+		else {
 			GetModuleFileName(NULL, filepath, MAX_PATH);
 			PathRemoveFileSpec(filepath);
 			PathAppend(filepath, filename);
