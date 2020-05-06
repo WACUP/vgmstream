@@ -15,6 +15,7 @@
 #define IDC_TAGFILE_DISABLE             1009
 #define IDC_EXTS_UNKNOWN_ON             1010
 #define IDC_EXTS_COMMON_ON              1011
+#define IDC_FORCE_TITLE                 1012
 
 // Next default values for new objects
 // 
@@ -22,7 +23,7 @@
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        102
 #define _APS_NEXT_COMMAND_VALUE         40001
-#define _APS_NEXT_CONTROL_VALUE         1012
+#define _APS_NEXT_CONTROL_VALUE         1013
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

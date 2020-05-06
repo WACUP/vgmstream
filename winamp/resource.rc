@@ -76,6 +76,7 @@ BEGIN
     GROUPBOX        "",IDC_STATIC,148,68,106,57
     CONTROL         "Enable unknown exts",IDC_EXTS_UNKNOWN_ON,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,157,78,87,10
     CONTROL         "Enable common exts",IDC_EXTS_COMMON_ON,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,157,91,87,10
+    CONTROL         "Force internal title",IDC_FORCE_TITLE,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,157,105,87,10
     PUSHBUTTON      "&Default",IDC_DEFAULT_BUTTON,6,129,50,14
     DEFPUSHBUTTON   "&OK",IDOK,204,129,50,14
 END
@@ -87,8 +88,8 @@ END
 //
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 2,1,2903,0
- PRODUCTVERSION 2,1,2903,0
+ FILEVERSION 2,1,2946,0
+ PRODUCTVERSION 2,1,2946,0
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -105,12 +106,12 @@ BEGIN
         BEGIN
             VALUE "CompanyName", "WACUP (WinAmp Community Update Project)"
             VALUE "FileDescription", "Winamp Input Plug-in"
-            VALUE "FileVersion", "2.1.2903.0"
+            VALUE "FileVersion", "2.1.2946.0"
             VALUE "InternalName", "in_vgmstream.dll"
             VALUE "LegalCopyright", "Copyright © 2008-2020 Halley's Comet Software + Contributors"
             VALUE "OriginalFilename", "in_vgmstream.dll"
             VALUE "ProductName", "vgmstream Decoder"
-            VALUE "ProductVersion", "2.1.2903.0"
+            VALUE "ProductVersion", "2.1.2946.0"
         END
     END
     BLOCK "VarFileInfo"

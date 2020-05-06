@@ -54,10 +54,10 @@
 #endif
 
 #ifndef VERSIONW
-#define VERSIONW L"2.1.2908"
+#define VERSIONW L"2.1.2946"
 #endif
 
-#define LIBVGMSTREAM_BUILD "1050-2893-g14dc8566-wacup"
+#define LIBVGMSTREAM_BUILD "1050-2946-g1e583645-wacup"
 #define APP_NAME "vgmstream plugin"
 #define PLUGIN_DESCRIPTION "vgmstream Decoder v" VERSION
 #define PLUGIN_DESCRIPTIONW L"vgmstream Decoder v" VERSIONW
@@ -87,6 +87,7 @@ wchar_t plugindir[MAX_PATH] = {0};
 #define DISABLE_SUBSONGS_INI_ENTRY TEXT("disable_subsongs")
 #define DOWNMIX_CHANNELS_INI_ENTRY TEXT("downmix_channels")
 #define DISABLE_TAGFILE_INI_ENTRY TEXT("tagfile_disable")
+#define FORCE_TITLE_INI_ENTRY TEXT("force_title")
 #define EXTS_UNKNOWN_ON TEXT("exts_unknown_on")
 #define EXTS_COMMON_ON TEXT("exts_common_on")
 
@@ -99,6 +100,7 @@ int disable_subsongs = 0;
 int downmix_channels = 0;
 int loaded_config = 0;
 int tagfile_disable = 0;
+int force_title = 0;
 int exts_unknown_on = 0;
 int exts_common_on = 0;
 
@@ -184,22 +186,26 @@ static void wasf_get_name(WINAMP_STREAMFILE *streamfile, char *buffer, size_t le
 }
 
 static STREAMFILE *wasf_open(WINAMP_STREAMFILE *streamFile, const char *const filename, size_t buffersize) {
-    int newfd;
-    FILE *newfile;
-    STREAMFILE *newstreamFile;
 	in_char wpath[PATH_LIMIT] = {0};
-    char name[PATH_LIMIT] = {0};
 
     if (!filename)
         return NULL;
 
+#if !defined (__ANDROID__) && !defined (_MSC_VER)
+    /* When enabling this for MSVC it'll seemingly work, but there are issues possibly related to underlying
+     * IO buffers when using dup(), noticeable by re-opening the same streamfile with small buffer sizes
+     * (reads garbage). This reportedly causes issues in Android too */
+
     /* if same name, duplicate the file pointer we already have open */ //unsure if all this is needed
+	char name[PATH_LIMIT] = { 0 };
     streamFile->stdiosf->get_name(streamFile->stdiosf, name, PATH_LIMIT);
     if (!strcmp(name,filename)) {
+		int newfd;
+		FILE *newfile;
         if (((newfd = dup(fileno(streamFile->infile_ref))) >= 0) &&
             (newfile = wa_fdopen(newfd)))
         {
-            newstreamFile = open_winamp_streamfile_by_file(newfile,filename);
+			STREAMFILE *newstreamFile = open_winamp_streamfile_by_file(newfile, filename);
             if (newstreamFile) {
                 return newstreamFile;
             }
@@ -207,6 +213,7 @@ static STREAMFILE *wasf_open(WINAMP_STREAMFILE *streamFile, const char *const fi
             fclose(newfile);
         }
     }
+#endif
 
     /* STREAMFILEs carry char/UTF8 names, convert to wchar for Winamp */
     wa_char_to_wchar(wpath, PATH_LIMIT, filename);
@@ -302,6 +309,7 @@ static VGMSTREAM* init_vgmstream_winamp(const in_char *fn, int stream_index) {
 #define DEFAULT_DISABLE_SUBSONGS 0
 #define DEFAULT_DOWNMIX_CHANNELS 0
 #define DEFAULT_TAGFILE_DISABLE 0
+#define DEFAULT_FORCE_TITLE 0
 #define DEFAULT_EXTS_UNKNOWN_ON 0
 #define DEFAULT_EXTS_COMMON_ON 0
 
@@ -350,6 +358,8 @@ void read_config() {
 
 		tagfile_disable = GetNativeIniInt(PLUGIN_INI, CONFIG_APP_NAME, DISABLE_TAGFILE_INI_ENTRY, DEFAULT_TAGFILE_DISABLE);
 		
+		force_title = GetNativeIniInt(PLUGIN_INI, CONFIG_APP_NAME, FORCE_TITLE_INI_ENTRY, DEFAULT_FORCE_TITLE);
+
 		exts_unknown_on = GetNativeIniInt(PLUGIN_INI, CONFIG_APP_NAME, EXTS_UNKNOWN_ON, DEFAULT_EXTS_UNKNOWN_ON);
 		exts_common_on = GetNativeIniInt(PLUGIN_INI, CONFIG_APP_NAME, EXTS_COMMON_ON, DEFAULT_EXTS_COMMON_ON);
 	}
@@ -394,6 +404,9 @@ INT_PTR CALLBACK configDlgProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lPara
 
 				if (tagfile_disable)
 					CheckDlgButton(hDlg, IDC_TAGFILE_DISABLE, BST_CHECKED);
+
+		if (force_title)
+			CheckDlgButton(hDlg, IDC_FORCE_TITLE, BST_CHECKED);
 
 				if (exts_unknown_on)
 					CheckDlgButton(hDlg, IDC_EXTS_UNKNOWN_ON, BST_CHECKED);
@@ -509,6 +522,15 @@ INT_PTR CALLBACK configDlgProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lPara
 											DISABLE_TAGFILE_INI_ENTRY, buf);
 						break;
 					}
+		case IDC_FORCE_TITLE:
+		{
+			wchar_t buf[256] = { 0 };
+			force_title = (IsDlgButtonChecked(hDlg, IDC_FORCE_TITLE) == BST_CHECKED);
+			_snwprintf(buf, ARRAYSIZE(buf), L"%d", force_title);
+			SaveNativeIniString(PLUGIN_INI, CONFIG_APP_NAME,
+								FORCE_TITLE_INI_ENTRY, buf);
+			break;
+		}
 				case IDC_EXTS_UNKNOWN_ON:
 					{
 						wchar_t buf[256] = {0};
@@ -542,6 +564,8 @@ INT_PTR CALLBACK configDlgProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lPara
 						SetDlgItemInt(hDlg, IDC_DOWNMIX_CHANNELS, DEFAULT_DOWNMIX_CHANNELS, TRUE);
 
 						CheckDlgButton(hDlg, IDC_TAGFILE_DISABLE, BST_UNCHECKED);
+
+			CheckDlgButton(hDlg, IDC_FORCE_TITLE, BST_UNCHECKED);
 
 						CheckDlgButton(hDlg, IDC_EXTS_UNKNOWN_ON, BST_UNCHECKED);
 						CheckDlgButton(hDlg, IDC_EXTS_COMMON_ON, BST_UNCHECKED);
@@ -735,11 +759,28 @@ static void get_title(in_char * dst, int dst_size, const in_char * fn, VGMSTREAM
     ++basename;
     wcscpy(dst, basename);
 
-    /* show stream subsong number */
-    if (stream_index > 0) {
-        _snwprintf(buffer, PATH_LIMIT, L"#%i", stream_index);
+	/* infostream gets added at first with index 0, then once played it re-adds proper numbers */
+	if (infostream) {
+		const char* info_name = infostream->stream_name;
+		int info_streams = infostream->num_streams;
+		int info_subsong = infostream->stream_index;
+		int is_first = infostream->stream_index == 0;
+
+		/* show number if file has more than 1 subsong */
+		if (info_streams > 1) {
+			if (is_first)
+				_snwprintf(buffer,PATH_LIMIT, L"#1~%i", info_streams);
+			else
+				_snwprintf(buffer,PATH_LIMIT, L"#%i", info_subsong);
         wcscat(dst, buffer);
     }
+
+		/* show name if file has subsongs (implicitly shows also for TXTP) */
+		if (info_name[0] != '\0' && ((info_streams > 0 && !is_first) || info_streams == 1 || force_title)) {
+			_snwprintf(buffer,PATH_LIMIT, L" (%hs)", info_name);
+			wcscat(dst,buffer);
+		}
+	}
 
     /* show name, but not for the base stream */
     if (infostream && infostream->stream_name[0] != '\0' && stream_index > 0) {
@@ -966,7 +1007,7 @@ int play(const in_char *fn) {
 										0,      /* stack size, 0=default */
 										decode, /* thread start routine */
 										NULL,   /* no parameter to start routine */
-										0,      /* run thread immediately */
+		CREATE_SUSPENDED, /* wait to set the priority */
 										NULL);  /* don't keep track of the thread id */
 
     if (decode_thread_handle == 0 ||
@@ -976,7 +1017,7 @@ int play(const in_char *fn) {
         vgmstream = NULL;
         return -1;
 	}
-
+	ResumeThread(decode_thread_handle);
     return 0; /* success */
 }
 
@@ -1191,6 +1232,11 @@ DWORD WINAPI __stdcall decode(void *arg) {
             plugin.outMod->CanWrite();    /* ? */
             if (!plugin.outMod->IsPlaying()) {
                 PostMessage(plugin.hMainWindow, WM_WA_MPEG_EOF, 0,0); /* end */
+				if (decode_thread_handle)
+				{
+					CloseHandle(decode_thread_handle);
+					decode_thread_handle = 0;
+				}
                 return 0;
             }
             Sleep(10);
@@ -1242,6 +1288,11 @@ DWORD WINAPI __stdcall decode(void *arg) {
         }
     }
 
+	if (decode_thread_handle)
+	{
+		CloseHandle(decode_thread_handle);
+		decode_thread_handle = 0;
+	}
     return 0;
 }
 
