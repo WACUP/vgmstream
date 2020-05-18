@@ -54,10 +54,10 @@
 #endif
 
 #ifndef VERSIONW
-#define VERSIONW L"2.1.2946"
+#define VERSIONW L"2.1.2955"
 #endif
 
-#define LIBVGMSTREAM_BUILD "1050-2946-g1e583645-wacup"
+#define LIBVGMSTREAM_BUILD "1050-2955-g9aaba3b3-wacup"
 #define APP_NAME "vgmstream plugin"
 #define PLUGIN_DESCRIPTION "vgmstream Decoder v" VERSION
 #define PLUGIN_DESCRIPTIONW L"vgmstream Decoder v" VERSIONW
@@ -128,7 +128,7 @@ double volume = 1.0;
 
 const wchar_t* tagfile_name = L"!tags.m3u"; //todo make configurable
 
-wchar_t lastfn[MAX_PATH] = {0}; /* name of the currently playing file */
+wchar_t lastfn[FILENAME_SIZE] = { 0 }; /* name of the currently playing file */
 
 /* ************************************* */
 
@@ -186,7 +186,7 @@ static void wasf_get_name(WINAMP_STREAMFILE *streamfile, char *buffer, size_t le
 }
 
 static STREAMFILE *wasf_open(WINAMP_STREAMFILE *streamFile, const char *const filename, size_t buffersize) {
-	in_char wpath[PATH_LIMIT] = {0};
+	in_char wpath[FILENAME_SIZE] = { 0 };
 
     if (!filename)
         return NULL;
@@ -197,8 +197,8 @@ static STREAMFILE *wasf_open(WINAMP_STREAMFILE *streamFile, const char *const fi
      * (reads garbage). This reportedly causes issues in Android too */
 
     /* if same name, duplicate the file pointer we already have open */ //unsure if all this is needed
-	char name[PATH_LIMIT] = { 0 };
-    streamFile->stdiosf->get_name(streamFile->stdiosf, name, PATH_LIMIT);
+	char name[FILENAME_SIZE] = { 0 };
+	streamFile->stdiosf->get_name(streamFile->stdiosf, name, FILENAME_SIZE);
     if (!strcmp(name,filename)) {
 		int newfd;
 		FILE *newfile;
@@ -216,7 +216,7 @@ static STREAMFILE *wasf_open(WINAMP_STREAMFILE *streamFile, const char *const fi
 #endif
 
     /* STREAMFILEs carry char/UTF8 names, convert to wchar for Winamp */
-    wa_char_to_wchar(wpath, PATH_LIMIT, filename);
+	wa_char_to_wchar(wpath, FILENAME_SIZE, filename);
     return open_winamp_streamfile_by_wpath(wpath);
 }
 
@@ -258,14 +258,14 @@ fail:
 static STREAMFILE *open_winamp_streamfile_by_wpath(const in_char *wpath) {
     FILE *infile = NULL;
     STREAMFILE *streamFile;
-    char path[PATH_LIMIT] = {0};
+	char path[FILENAME_SIZE] = { 0 };
 
     /* open a FILE from a Winamp (possibly UTF-16) path */
     infile = wa_fopen(wpath);
     if (!infile) return NULL;
 
     /* convert to UTF-8 if needed for internal use */
-    wa_wchar_to_char(path, PATH_LIMIT, wpath);
+	wa_wchar_to_char(path, FILENAME_SIZE, wpath);
 
     streamFile = open_winamp_streamfile_by_file(infile, path);
     if (!streamFile) {
@@ -612,9 +612,9 @@ static int split_subsongs(const in_char * filename, int stream_index, VGMSTREAM 
     /* The only way to pass info around in Winamp is encoding it into the filename, so a fake name
      * is created with the index. Then, winamp_Play (and related) intercepts and reads the index. */
     for (i = 0; i < vgmstream->num_streams; i++) {
-        in_char stream_fn[PATH_LIMIT] = {0};
+		in_char stream_fn[FILENAME_SIZE] = { 0 };
 
-        make_fn_subsong(stream_fn, PATH_LIMIT, filename, (i + 1)); /* encode index in filename */
+		make_fn_subsong(stream_fn, FILENAME_SIZE, filename, (i + 1)); /* encode index in filename */
 
         /* insert at index */
         {
@@ -746,11 +746,11 @@ static void build_extension_list() {
 /* unicode utils */
 static void get_title(in_char * dst, int dst_size, const in_char * fn, VGMSTREAM * infostream) {
     in_char *basename;
-	in_char buffer[PATH_LIMIT] = {0};
-    in_char filename[PATH_LIMIT] = {0};
+	in_char buffer[FILENAME_SIZE] = { 0 };
+	in_char filename[FILENAME_SIZE] = { 0 };
     int stream_index = 0;
 
-    parse_fn_string(fn, NULL, filename, PATH_LIMIT);
+	parse_fn_string(fn, NULL, filename, FILENAME_SIZE);
     parse_fn_int(fn, L"$s", &stream_index);
 
     basename = (in_char*)filename + wcslen(filename); /* find end */
@@ -769,24 +769,24 @@ static void get_title(in_char * dst, int dst_size, const in_char * fn, VGMSTREAM
 		/* show number if file has more than 1 subsong */
 		if (info_streams > 1) {
 			if (is_first)
-				_snwprintf(buffer,PATH_LIMIT, L"#1~%i", info_streams);
+				_snwprintf(buffer, FILENAME_SIZE, L"#1~%i", info_streams);
 			else
-				_snwprintf(buffer,PATH_LIMIT, L"#%i", info_subsong);
+				_snwprintf(buffer, FILENAME_SIZE, L"#%i", info_subsong);
         wcscat(dst, buffer);
     }
 
 		/* show name if file has subsongs (implicitly shows also for TXTP) */
 		if (info_name[0] != '\0' && ((info_streams > 0 && !is_first) || info_streams == 1 || force_title)) {
-			_snwprintf(buffer,PATH_LIMIT, L" (%hs)", info_name);
+			_snwprintf(buffer, FILENAME_SIZE, L" (%hs)", info_name);
 			wcscat(dst,buffer);
 		}
 	}
 
     /* show name, but not for the base stream */
     if (infostream && infostream->stream_name[0] != '\0' && stream_index > 0) {
-        in_char stream_name[PATH_LIMIT] = {0};
-        wa_char_to_wchar(stream_name, PATH_LIMIT, infostream->stream_name);
-        _snwprintf(buffer, PATH_LIMIT, L" (%s)", stream_name);
+		in_char stream_name[FILENAME_SIZE] = { 0 };
+		wa_char_to_wchar(stream_name, FILENAME_SIZE, infostream->stream_name);
+		_snwprintf(buffer, FILENAME_SIZE, L" (%s)", stream_name);
         wcscat(dst, buffer);
     }
 }
@@ -898,14 +898,15 @@ void quit() {
 }
 
 /* called before extension checks, to allow detection of mms://, etc */
+// TODO need to get this just working nicely with WACUP to avoid conflict
 int isourfile(const in_char *fn) {
-	if (!PathIsURL(fn))
+	if (fn && *fn && !PathIsURL(fn))
 	{
-    const in_char *filename;
+		//const in_char *filename;
     const in_char *extension;
 
     /* get basename + extension */
-    filename = fn;
+		//filename = fn;
 #if 0
     //must detect empty extensions in folders with . in the name; doesn't work ok?
     filename = wcsrrchr(fn, L'\\');
@@ -914,9 +915,10 @@ int isourfile(const in_char *fn) {
     else
         filename++;
 #endif
-    extension = wcsrchr(filename, L'.');
+		extension = wcsrchr(fn, L'.');
     if (extension == NULL)
-        return 1; /* extensionless, try to play it */
+			//return 1; /* extensionless, try to play it */
+			return 0; /* extensionless, avoid playing it */
     else
         extension++;
 
@@ -930,8 +932,8 @@ int isourfile(const in_char *fn) {
      * finally retry with "hi.mp3", accepted if exts_common_on is set. */
 
     /* returning 0 here means it only accepts the extensions in working_extension_list */
-	char filename_utf8[PATH_LIMIT];
-	wa_wchar_to_char(filename_utf8, PATH_LIMIT, fn);
+		char filename_utf8[FILENAME_SIZE];
+		wa_wchar_to_char(filename_utf8, FILENAME_SIZE, fn);
 	return vgmstream_ctx_is_valid(filename_utf8, &cfg);
 }
 	return 0;
@@ -940,7 +942,7 @@ int isourfile(const in_char *fn) {
 /* request to start playing a file */
 int play(const in_char *fn) {
     int max_latency;
-    in_char filename[PATH_LIMIT] = {0};
+	in_char filename[FILENAME_SIZE] = { 0 };
     int stream_index = 0;
 
 	read_config();
@@ -949,7 +951,7 @@ int play(const in_char *fn) {
         return 1; // TODO: this should either pop up an error box or close the file
 
     /* check for info encoded in the filename */
-    parse_fn_string(fn, NULL, filename, PATH_LIMIT);
+	parse_fn_string(fn, NULL, filename, FILENAME_SIZE);
     parse_fn_int(filename, L"$s", &stream_index);
 
     /* open the stream */
@@ -974,7 +976,7 @@ int play(const in_char *fn) {
 
 
     /* save original name */
-    wcsncpy(lastfn, filename, PATH_LIMIT);
+	wcsncpy(lastfn, filename, FILENAME_SIZE);
 
     /* open the output plugin */
     max_latency = (plugin.outMod ? plugin.outMod->Open(vgmstream->sample_rate, output_channels, 16, -1, -1) : -1);
@@ -1103,11 +1105,11 @@ int infoDlg(const in_char *fn, HWND hwnd) {
     else {
         /* some other file in playlist given by filename */
         VGMSTREAM * infostream = NULL;
-        in_char filename[PATH_LIMIT] = {0};
+		in_char filename[FILENAME_SIZE] = { 0 };
         int stream_index = 0;
 
         /* check for info encoded in the filename */
-        parse_fn_string(fn, NULL, filename, PATH_LIMIT);
+		parse_fn_string(fn, NULL, filename, FILENAME_SIZE);
         parse_fn_int(fn, L"$s", &stream_index);
 
         infostream = init_vgmstream_winamp(filename, stream_index);
@@ -1149,11 +1151,11 @@ void getfileinfo(const in_char *fn, in_char *title, int *length_in_ms){
     else {
         /* some other file in playlist given by filename */
         VGMSTREAM * infostream = NULL;
-        in_char filename[PATH_LIMIT] = {0};
+		in_char filename[FILENAME_SIZE] = { 0 };
         int stream_index = 0;
 
         /* check for info encoded in the filename */
-        parse_fn_string(fn, NULL, filename,PATH_LIMIT);
+		parse_fn_string(fn, NULL, filename, FILENAME_SIZE);
         parse_fn_int(fn, L"$s", &stream_index);
 
         infostream = init_vgmstream_winamp(filename, stream_index);
@@ -1372,7 +1374,7 @@ extern "C" __declspec(dllexport) HWND winampAddUnifiedFileInfoPane(int n, const 
 
 typedef struct {
     int loaded;
-    in_char filename[PATH_LIMIT]; /* tags are loaded for this file */
+	in_char filename[FILENAME_SIZE]; /* tags are loaded for this file */
     int tag_count;
 
     char keys[WINAMP_TAGS_ENTRY_MAX][WINAMP_TAGS_ENTRY_SIZE+1];
@@ -1386,10 +1388,10 @@ winamp_tags last_tags;
  * Winamp requests one tag at a time and may reask for the same tag several times */
 static void load_tagfile_info(in_char *filename) {
     STREAMFILE *tagFile = NULL;
-    in_char filename_clean[PATH_LIMIT];
-    char filename_utf8[PATH_LIMIT];
-    char tagfile_path_utf8[PATH_LIMIT];
-    in_char tagfile_path_i[PATH_LIMIT];
+	in_char filename_clean[FILENAME_SIZE];
+	char filename_utf8[FILENAME_SIZE];
+	char tagfile_path_utf8[FILENAME_SIZE];
+	in_char tagfile_path_i[FILENAME_SIZE];
     char *path;
 
 
@@ -1400,7 +1402,7 @@ static void load_tagfile_info(in_char *filename) {
     }
 
     /* clean extra part for subsong tags */
-    parse_fn_string(filename, NULL, filename_clean,PATH_LIMIT);
+	parse_fn_string(filename, NULL, filename_clean, FILENAME_SIZE);
 
     if (wcscmp(last_tags.filename, filename_clean) == 0) {
         return; /* not changed, tags still apply */
@@ -1409,7 +1411,7 @@ static void load_tagfile_info(in_char *filename) {
     last_tags.loaded = 0;
 
     /* tags are now for this filename, find tagfile path */
-    wa_wchar_to_char(filename_utf8, PATH_LIMIT, filename_clean);
+	wa_wchar_to_char(filename_utf8, FILENAME_SIZE, filename_clean);
     strcpy(tagfile_path_utf8,filename_utf8);
 
     path = strrchr(tagfile_path_utf8,'\\');
@@ -1420,7 +1422,7 @@ static void load_tagfile_info(in_char *filename) {
     else { /* ??? */
         strncpy(tagfile_path_utf8,AutoChar(tagfile_name),ARRAYSIZE(tagfile_path_utf8));
     }
-    wa_char_to_wchar(tagfile_path_i, PATH_LIMIT, tagfile_path_utf8);
+	wa_char_to_wchar(tagfile_path_i, FILENAME_SIZE, tagfile_path_utf8);
 
     wcsncpy(last_tags.filename, filename_clean, ARRAYSIZE(last_tags.filename));
     last_tags.tag_count = 0;
@@ -1680,11 +1682,11 @@ extern "C" __declspec(dllexport) intptr_t winampGetExtendedRead_openW(const wcha
 	read_config();
 
 	VGMSTREAM *ext_vgmstream = NULL;
-	in_char filename[PATH_LIMIT] = { 0 };
+	in_char filename[FILENAME_SIZE] = { 0 };
 	int stream_index = 0;
 
 	/* check for info encoded in the filename */
-	parse_fn_string(fn, NULL, filename, PATH_LIMIT);
+	parse_fn_string(fn, NULL, filename, FILENAME_SIZE);
 	parse_fn_int(fn, L"$s", &stream_index);
 
 	/* open the stream */
