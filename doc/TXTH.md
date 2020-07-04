@@ -147,6 +147,8 @@ as explained below, but often will use default values. Accepted codec strings:
 #   * For Tiger Game.com
 # - ASF            Argonaut ASF ADPCM
 #   * For rare Argonaut games [Croc (SAT)]
+# - EAXA           Electronic Arts EA-XA ADPCM
+#   * For rare EA games [Harry Potter and the Chamber of Secrets (PC)]
 codec = (codec string)
 ```
 
@@ -155,7 +157,7 @@ Changes the behavior of some codecs:
 ```
 # - NGC_DSP: 0=normal interleave, 1=byte interleave, 2=no interleave
 # - XMA1|XMA2: 0=dual multichannel (2ch xN), 1=single multichannel (1ch xN)
-# - XBOX: 0=standard (mono or stereo interleave), 1=force mono interleave mode
+# - XBOX|EAXA: 0=standard (mono or stereo interleave), 1=force mono interleave mode
 # - PCFX: 0=standard, 1='buggy encoder' mode, 2/3=same as 0/1 but with double volume
 # - PCM4|PCM4_U: 0=low nibble first, 1=high nibble first
 # - others: ignored
@@ -266,15 +268,16 @@ loop_end_sample     = (value)|data_size
 Force loop on or off, as loop start/end may be defined but not used. If not set, by default it loops when loop_end_sample is defined and less than num_samples.
 
 Special values:
-- auto: tries to autodetect loop points for PS-ADPCM data using data loop flags.
+- `auto`: tries to autodetect loop points for PS-ADPCM data using data loop flags.
 
 Sometimes games give loop flags different meaning, so behavior can be tweaked by defining `loop_behavior` before `loop_flag`:
 - `default`: values 0 or 0xFFFF/0xFFFFFFFF (-1) disable looping, but not 0xFF (loop endlessly)
 - `negative`: values 0xFF/0xFFFF/0xFFFFFFFF (-1) enable looping
 - `positive`: values 0xFF/0xFFFF/0xFFFFFFFF (-1) disable looping
+- `inverted`: values not 0 disable looping
 
 ```
-loop_negative = default|negative|positive
+loop_behavior = default|negative|positive|inverted
 loop_flag = (value)|auto
 ```
 
@@ -300,7 +303,7 @@ DSP needs a "coefs" list to decode correctly. These are 8*2 16-bit values per ch
 
 Usually each channel uses its own list, so we may need to set separation per channel, usually 0x20 (16 values * 2 bytes). So channel N coefs are read at `coef_offset + coef_spacing * N`
 
-Those 16-bit coefs can be little or big endian (usually BE), set `coef_endianness` directly or in an offset value where ´0=LE, >0=BE´.
+Those 16-bit coefs can be little or big endian (usually BE), set `coef_endianness` directly or in an offset value where `0=LE, >0=BE`.
 
 While the coef table is almost always included per-file, some games have their coef table in the executable or precalculated somehow. You can set inline coefs instead of coef_offset. Format is a long string of bytes (optionally space-separated) like `coef_table = 0x1E02DE01 3C0C0EFA ...`. You still need to set `coef_spacing` and `coef_endianness` though.
 ```
@@ -412,12 +415,12 @@ Inside the table you define lines mapping a filename to a bunch of values, in th
 (filename1): (value)
 ...
 # may put multiple comma-separated values, spaces are ok
-(filenameN)    : (value1), (...)   ,   (valueN)
+(filenameN)    : (value1), (...)   ,   (valueN)  # inline comments too
 
 # put no name before the : to set default values
  : (value1), (...), (valueN)
 ```
-Then I'll find your current file name, and you can then reference its numbers from the list as a `name_value` field, like `base_offset = name_value`, `start_offset = 0x1000 + name_value1`, `interleave = name_value5`, etc. `(filename)` can be with or without extension (like `bgm01.vag` or just `bgm01`), and if the file's name isn't found it'll use default values, and if those aren't defined you'll get 0 instead. Being "values" they can be use math or offsets too.
+Then I'll find your current file name, and you can then reference its numbers from the list as a `name_value` field, like `base_offset = name_value`, `start_offset = 0x1000 + name_value1`, `interleave = name_value5`, etc. `(filename)` can be with or without extension (like `bgm01.vag` or just `bgm01`), and if the file's name isn't found it'll use default values, and if those aren't defined you'll get 0 instead. Being "values" they can use math or offsets too (`bgm05: 5*0x010`).
 
 You can use wildcards to match multiple names too (it stops on first name that matches), and UTF-8 names should work, case insensitive even.
 ```
@@ -426,11 +429,11 @@ bgm*_M: 1   # 1ch: some files end with _M for mono
 bgm*: 2     # 2ch: all other files, notice order matters
 ```
 
-While you can put anything in the numbers, this feature is meant to be used to store some number that points to the actual data inside a real multi-header, that could be set with `header_file`. If you need to store many constant values there is good chance this can be supported in some better way.
+While you can put anything in the values, this feature is meant to be used to store some number that points to the actual data inside a real multi-header, that could be set with `header_file`. If you feel the need to store many constant values per file, there is good chance it can be done in some better, simpler way.
 
 
 #### BASE OFFSET MODIFIER
-You can set a default offset that affects next `@(offset)` reads making them `@(offset + base_offset)`, for cleaner parsing (particularly interesting when combined with the `name_list).
+You can set a default offset that affects next `@(offset)` reads making them `@(offset + base_offset)`, for cleaner parsing (particularly interesting when combined with the `name_table`).
 
 For example instead of `channels = @0x714` you could set `base_offset = 0x710, channels = @0x04`. Set to 0 when you want to disable it.
 ```
@@ -631,7 +634,7 @@ chunk_count = 26
 
 # after setting chunks (sizes vary when 'dechunking')
 start_offset = 0x00
-padding_size = auto-empty   
+padding_size = auto-empty
 num_samples = data_size
 ```
 
@@ -673,9 +676,9 @@ Some formats read an offset to another part of the file, then another offset, th
 
 You can simulate this chaining multiple `base_offset`
 ```
-base_offset = @0x10                 #sets at 0x1000
-channels    = @0x04                 #reads at 0x1004
-base_offset = base_offset + @0x10   #sets at 0x1000 + 0x200 = 0x1200
+base_offset = @0x10                 #sets current at 0x1000
+channels    = @0x04                 #reads at 0x1004 (base_offset + 0x04)
+base_offset = base_offset + @0x10   #sets current at 0x1000 + 0x200 = 0x1200
 sample_rate = @0x04                 #reads at 0x1204
 ...
 ```
@@ -845,7 +848,7 @@ JIN003.XAG: 0x180
 ```
 
 
-**Grandia (PS1) bgm.txth**
+#### Grandia (PS1) bgm.txth
 ```
 header_file       = GM1.IDX
 body_file         = GM1.STZ

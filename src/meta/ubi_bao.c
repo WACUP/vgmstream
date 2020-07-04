@@ -989,11 +989,9 @@ static int parse_type_layer(ubi_bao_header * bao, off_t offset, STREAMFILE* stre
         if (bao->sample_rate != sample_rate || bao->stream_type != stream_type) {
             VGM_LOG("UBI BAO: layer headers don't match at %x\n", (uint32_t)table_offset);
 
-            if (bao->cfg.layer_ignore_error) {
-                continue;
+            if (!bao->cfg.layer_ignore_error) {
+                goto fail;
             }
-
-            goto fail;
         }
 
         /* uncommonly channels may vary per layer [Rayman Raving Rabbids: TV Party (Wii) ex. 0x22000cbc.pk] */
@@ -1735,7 +1733,7 @@ static int config_bao_version(ubi_bao_header * bao, STREAMFILE *streamFile) {
         case 0x001F0008: /* Rayman Raving Rabbids: TV Party (Wii)-package */
         case 0x001F0010: /* Prince of Persia 2008 (PC/PS3/X360)-atomic-forge, Far Cry 2 (PS3)-atomic-dunia? */
         case 0x001F0011: /* Naruto: The Broken Bond (X360)-package */
-        case 0x0021000C: /* Splinter Cell: Conviction (X360)(E3 2009 Demo)-package */
+        case 0x0021000C: /* Splinter Cell: Conviction (E3 2009 Demo)(X360)-package */
         case 0x0022000D: /* Just Dance (Wii)-package */
         case 0x0022001B: /* Prince of Persia: The Forgotten Sands (Wii)-package */
             config_bao_entry(bao, 0xA4, 0x28); /* PC/Wii: 0xA8 */

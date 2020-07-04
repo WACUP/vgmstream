@@ -337,9 +337,14 @@ static const hcakey_info hcakey_list[] = {
         /* I Chu EtoileStage (Android) */
         {1433227444226663680},      // 13E3D8C45778A500
 
+        /* 22/7 Ongaku no Jikan (Android) */
+        {20190906},                 // 00000000013416BA
+
         /* Dragalia Lost (iOS/Android) */
         {2967411924141,         subkeys_dgl, sizeof(subkeys_dgl) / sizeof(subkeys_dgl[0]) },    // 000002B2E7889CAD
 
+        /* Cardcaptor Sakura: Happiness Memories (Android) */
+        {625144437747651},          // 00023890C8252FC3
 };
 
 #endif/*_HCA_KEYS_H_*/
