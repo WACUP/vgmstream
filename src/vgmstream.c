@@ -501,6 +501,7 @@ VGMSTREAM * (*init_vgmstream_functions[])(STREAMFILE *streamFile) = {
     init_vgmstream_mups,
     init_vgmstream_kat,
     init_vgmstream_pcm_success,
+    init_vgmstream_ktsc,
 
     /* lowest priority metas (should go after all metas, and TXTH should go before raw formats) */
     init_vgmstream_txth,            /* proper parsers should supersede TXTH, once added */
@@ -1229,6 +1230,7 @@ int get_vgmstream_samples_per_frame(VGMSTREAM * vgmstream) {
         case coding_XBOX_IMA_int:
         case coding_FSB_IMA:
         case coding_WWISE_IMA:
+        case coding_CD_IMA:
             return 64;
         case coding_APPLE_IMA4:
             return 64;
@@ -1433,6 +1435,7 @@ int get_vgmstream_frame_size(VGMSTREAM * vgmstream) {
             return 0x24; //vgmstream->channels==1 ? 0x24 : 0x48;
         case coding_XBOX_IMA_int:
         case coding_WWISE_IMA:
+        case coding_CD_IMA:
             return 0x24;
         case coding_XBOX_IMA_mch:
         case coding_FSB_IMA:
@@ -1989,6 +1992,12 @@ void decode_vgmstream(VGMSTREAM * vgmstream, int samples_written, int samples_to
                 decode_h4m_ima(&vgmstream->ch[ch],buffer+samples_written*vgmstream->channels+ch,
                         vgmstream->channels,vgmstream->samples_into_block,samples_to_do, ch,
                         frame_format);
+            }
+            break;
+        case coding_CD_IMA:
+            for (ch = 0; ch < vgmstream->channels; ch++) {
+                decode_cd_ima(&vgmstream->ch[ch],buffer+samples_written*vgmstream->channels+ch,
+                        vgmstream->channels,vgmstream->samples_into_block,samples_to_do, ch);
             }
             break;
 
