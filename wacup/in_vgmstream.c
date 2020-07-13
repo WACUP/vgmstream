@@ -54,10 +54,10 @@
 #endif
 
 #ifndef VERSIONW
-#define VERSIONW L"2.1.3100"
+#define VERSIONW L"2.1.3093"
 #endif
 
-#define LIBVGMSTREAM_BUILD "1050-3100-g7a93db70-wacup"
+#define LIBVGMSTREAM_BUILD "1050-3093-gc36ff74e-wacup"
 #define APP_NAME "vgmstream plugin"
 #define PLUGIN_DESCRIPTION "vgmstream Decoder v" VERSION
 #define PLUGIN_DESCRIPTIONW L"vgmstream Decoder v" VERSIONW
@@ -313,7 +313,7 @@ static VGMSTREAM* init_vgmstream_winamp(const in_char *fn, int stream_index) {
 #define DEFAULT_EXTS_UNKNOWN_ON 0
 #define DEFAULT_EXTS_COMMON_ON 0
 
-void read_config() {
+void read_config(void) {
 	if (!loaded_config) {
 		wchar_t buf[256] = {0};
 		int consumed;
@@ -878,7 +878,7 @@ void __cdecl GetFileExtensions(void)
 }
 
 /* called at program init */
-int init() {
+int init(void) {
 	WASABI_API_LNG = plugin.language;
 
 	// need to have this initialised before we try to do anything with localisation features
@@ -894,7 +894,7 @@ int init() {
 }
 
 /* called at program quit */
-void quit() {
+void quit(void) {
 }
 
 /* called before extension checks, to allow detection of mms://, etc */
@@ -1024,23 +1024,23 @@ int play(const in_char *fn) {
 }
 
 /* pause stream */
-void pause() {
+void pause(void) {
     paused = 1;
     plugin.outMod->Pause(1);
 }
 
-void unpause() {
+void unpause(void) {
     paused = 0;
     plugin.outMod->Pause(0);
 }
 
 /* return 1 if paused, 0 if not */
-int ispaused() {
+int ispaused(void) {
     return paused;
 }
 
 /* stop (unload) stream */
-void stop() {
+void stop(void) {
     if (decode_thread_handle != INVALID_HANDLE_VALUE) {
         decode_abort = 1;
 
@@ -1061,12 +1061,12 @@ void stop() {
 }
 
 /* get length in ms */
-int getlength() {
+int getlength(void) {
     return stream_length_samples * 1000LL / vgmstream->sample_rate;
 }
 
 /* current output time in ms */
-int getoutputtime() {
+int getoutputtime(void) {
     return decode_pos_ms + (plugin.outMod->GetOutputTime() - plugin.outMod->GetWrittenTime());
 }
 
@@ -1308,7 +1308,7 @@ void config(HWND hwndParent) {
 /* main plugin def */
 In_Module plugin = {
 	IN_VER_WACUP,
-    (char*)PLUGIN_DESCRIPTIONW,
+    (char*)L"wacup(in_vgmstream.dll)",
     0,  /* hMainWindow (filled in by Winamp) */
     0,  /* hDllInstance (filled in by Winamp) */
     NULL,
@@ -1340,7 +1340,7 @@ In_Module plugin = {
     GetFileExtensions /* loading optimisation :) */
 };
 
-extern "C" __declspec(dllexport) In_Module * winampGetInModule2() {
+extern "C" __declspec(dllexport) In_Module * winampGetInModule2(void) {
     return &plugin;
 }
 
