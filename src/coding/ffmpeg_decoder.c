@@ -11,11 +11,8 @@
 
 static volatile int g_ffmpeg_initialized = 0;
 
-static void free_ffmpeg_config(ffmpeg_codec_data *data);
-static int init_ffmpeg_config(ffmpeg_codec_data * data, int target_subsong, int reset);
-
-static void reset_ffmpeg_internal(ffmpeg_codec_data *data);
-static void seek_ffmpeg_internal(ffmpeg_codec_data *data, int32_t num_sample);
+static void free_ffmpeg_config(ffmpeg_codec_data* data);
+static int init_ffmpeg_config(ffmpeg_codec_data* data, int target_subsong, int reset);
 
 /* ******************************************** */
 /* INTERNAL UTILS                               */
@@ -37,7 +34,7 @@ static void g_init_ffmpeg() {
     }
 }
 
-static void remap_audio(sample_t *outbuf, int sample_count, int channels, int *channel_mappings) {
+static void remap_audio(sample_t* outbuf, int sample_count, int channels, int* channel_mappings) {
     int ch_from,ch_to,s;
     sample_t temp;
     for (s = 0; s < sample_count; s++) {
@@ -68,7 +65,7 @@ static void remap_audio(sample_t *outbuf, int sample_count, int channels, int *c
  * first frame/packet and sets up index to timestamp 0. This ensures faulty demuxers will seek to 0 correctly.
  * Some formats may not seek to 0 even with this, though.
  */
-static int init_seek(ffmpeg_codec_data * data) {
+static int init_seek(ffmpeg_codec_data* data) {
     int ret, ts_index, packet_count = 0;
     int64_t ts = 0; /* seek timestamp */
     int64_t pos = 0; /* data offset */
@@ -164,8 +161,8 @@ fail:
 /* ******************************************** */
 
 /* AVIO callback: read stream, handling custom data */
-static int ffmpeg_read(void *opaque, uint8_t *buf, int read_size) {
-    ffmpeg_codec_data *data = (ffmpeg_codec_data *) opaque;
+static int ffmpeg_read(void* opaque, uint8_t* buf, int read_size) {
+    ffmpeg_codec_data* data = opaque;
     int bytes = 0;
     int max_to_copy = 0;
 
@@ -199,8 +196,8 @@ static int ffmpeg_read(void *opaque, uint8_t *buf, int read_size) {
 }
 
 /* AVIO callback: seek stream, handling custom data */
-static int64_t ffmpeg_seek(void *opaque, int64_t offset, int whence) {
-    ffmpeg_codec_data *data = (ffmpeg_codec_data *) opaque;
+static int64_t ffmpeg_seek(void* opaque, int64_t offset, int whence) {
+    ffmpeg_codec_data* data = opaque;
     int ret = 0;
 
     /* get cache'd size */
@@ -246,11 +243,11 @@ static int64_t ffmpeg_seek(void *opaque, int64_t offset, int whence) {
 /* MAIN INIT/DECODER                            */
 /* ******************************************** */
 
-ffmpeg_codec_data * init_ffmpeg_offset(STREAMFILE *streamFile, uint64_t start, uint64_t size) {
+ffmpeg_codec_data* init_ffmpeg_offset(STREAMFILE* sf, uint64_t start, uint64_t size) {
 #ifdef _MSC_VER
 	__try {
 #endif
-    return init_ffmpeg_header_offset(streamFile, NULL,0, start,size);
+    return init_ffmpeg_header_offset(sf, NULL,0, start,size);
 #ifdef _MSC_VER
 	}
 	__except (EXCEPTION_EXECUTE_HANDLER) {
@@ -259,11 +256,11 @@ ffmpeg_codec_data * init_ffmpeg_offset(STREAMFILE *streamFile, uint64_t start, u
 #endif
 }
 
-ffmpeg_codec_data * init_ffmpeg_header_offset(STREAMFILE *streamFile, uint8_t * header, uint64_t header_size, uint64_t start, uint64_t size) {
+ffmpeg_codec_data* init_ffmpeg_header_offset(STREAMFILE* sf, uint8_t * header, uint64_t header_size, uint64_t start, uint64_t size) {
 #ifdef _MSC_VER
 	__try {
 #endif
-    return init_ffmpeg_header_offset_subsong(streamFile, header, header_size, start, size, 0);
+    return init_ffmpeg_header_offset_subsong(sf, header, header_size, start, size, 0);
 #ifdef _MSC_VER
 	}
 	__except (EXCEPTION_EXECUTE_HANDLER) {
@@ -282,8 +279,8 @@ ffmpeg_codec_data * init_ffmpeg_header_offset(STREAMFILE *streamFile, uint8_t * 
  * NULL header can used given if the stream has internal data recognized by FFmpeg at offset.
  * Stream index can be passed if the file has multiple audio streams that FFmpeg can demux (1=first).
  */
-ffmpeg_codec_data * init_ffmpeg_header_offset_subsong(STREAMFILE *streamFile, uint8_t * header, uint64_t header_size, uint64_t start, uint64_t size, int target_subsong) {
-    ffmpeg_codec_data * data = NULL;
+ffmpeg_codec_data* init_ffmpeg_header_offset_subsong(STREAMFILE* sf, uint8_t* header, uint64_t header_size, uint64_t start, uint64_t size, int target_subsong) {
+    ffmpeg_codec_data* data = NULL;
     int errcode;
 
 
@@ -294,9 +291,9 @@ ffmpeg_codec_data * init_ffmpeg_header_offset_subsong(STREAMFILE *streamFile, ui
     if ((header && !header_size) || (!header && header_size))
         goto fail;
 
-    if (size == 0 || start + size > get_streamfile_size(streamFile)) {
-        VGM_LOG("FFMPEG: wrong start+size found: %x + %x > %x \n", (uint32_t)start, (uint32_t)size, get_streamfile_size(streamFile));
-        size = get_streamfile_size(streamFile) - start;
+    if (size == 0 || start + size > get_streamfile_size(sf)) {
+        VGM_LOG("FFMPEG: wrong start+size found: %x + %x > %x \n", (uint32_t)start, (uint32_t)size, get_streamfile_size(sf));
+        size = get_streamfile_size(sf) - start;
     }
 
 
@@ -308,7 +305,7 @@ ffmpeg_codec_data * init_ffmpeg_header_offset_subsong(STREAMFILE *streamFile, ui
     data = calloc(1, sizeof(ffmpeg_codec_data));
     if (!data) return NULL;
 
-    data->streamfile = reopen_streamfile(streamFile, 0);
+    data->streamfile = reopen_streamfile(sf, 0);
     if (!data->streamfile) goto fail;
 
     /* fake header to trick FFmpeg into demuxing/decoding the stream */
@@ -396,7 +393,7 @@ fail:
     return NULL;
 }
 
-static int init_ffmpeg_config(ffmpeg_codec_data * data, int target_subsong, int reset) {
+static int init_ffmpeg_config(ffmpeg_codec_data* data, int target_subsong, int reset) {
     int errcode = 0;
 
     /* basic IO/format setup */
@@ -485,7 +482,7 @@ fail:
 }
 
 /* decodes a new frame to internal data */
-static int decode_ffmpeg_frame(ffmpeg_codec_data *data) {
+static int decode_ffmpeg_frame(ffmpeg_codec_data* data) {
     int errcode;
     int frame_error = 0;
 
@@ -702,7 +699,7 @@ static void samples_dblp_to_s16(sample_t* obuf, double** inbuf, int ichs, int sa
     }
 }
 
-static void copy_samples(ffmpeg_codec_data *data, sample_t *outbuf, int samples_to_do) {
+static void copy_samples(ffmpeg_codec_data* data, sample_t* outbuf, int samples_to_do) {
     int channels = data->codecCtx->channels;
     int is_planar = av_sample_fmt_is_planar(data->codecCtx->sample_fmt) && (channels > 1);
     void* ibuf;
@@ -739,8 +736,8 @@ static void copy_samples(ffmpeg_codec_data *data, sample_t *outbuf, int samples_
 }
 
 /* decode samples of any kind of FFmpeg format */
-void decode_ffmpeg(VGMSTREAM *vgmstream, sample_t * outbuf, int32_t samples_to_do, int channels) {
-    ffmpeg_codec_data *data = vgmstream->codec_data;
+void decode_ffmpeg(VGMSTREAM* vgmstream, sample_t* outbuf, int32_t samples_to_do, int channels) {
+    ffmpeg_codec_data* data = vgmstream->codec_data;
 
 
     while (samples_to_do > 0) {
@@ -787,14 +784,11 @@ decode_fail:
 /* UTILS                                        */
 /* ******************************************** */
 
-void reset_ffmpeg_internal(ffmpeg_codec_data *data) {
-    seek_ffmpeg_internal(data, 0);
-}
-void reset_ffmpeg(VGMSTREAM *vgmstream) {
-    reset_ffmpeg_internal(vgmstream->codec_data);
+void reset_ffmpeg(ffmpeg_codec_data* data) {
+    seek_ffmpeg(data, 0);
 }
 
-void seek_ffmpeg_internal(ffmpeg_codec_data *data, int32_t num_sample) {
+void seek_ffmpeg(ffmpeg_codec_data* data, int32_t num_sample) {
     if (!data) return;
 
     /* Start from 0 and discard samples until sample (slower but not too noticeable).
@@ -843,12 +837,8 @@ fail:
     data->bad_init = 1; /* internals were probably free'd */
 }
 
-void seek_ffmpeg(VGMSTREAM *vgmstream, int32_t num_sample) {
-    seek_ffmpeg_internal(vgmstream->codec_data, num_sample);
-}
 
-
-static void free_ffmpeg_config(ffmpeg_codec_data *data) {
+static void free_ffmpeg_config(ffmpeg_codec_data* data) {
     if (data == NULL)
         return;
 
@@ -888,7 +878,7 @@ static void free_ffmpeg_config(ffmpeg_codec_data *data) {
     //todo avformat_find_stream_info may cause some Win Handle leaks? related to certain option
 }
 
-void free_ffmpeg(ffmpeg_codec_data *data) {
+void free_ffmpeg(ffmpeg_codec_data* data) {
     if (data == NULL)
         return;
 
@@ -913,7 +903,7 @@ void free_ffmpeg(ffmpeg_codec_data *data) {
  * This could be added per format in FFmpeg directly, but it's here for flexibility and due to bugs
  *  (FFmpeg's stream->(start_)skip_samples causes glitches in XMA).
  */
-void ffmpeg_set_skip_samples(ffmpeg_codec_data * data, int skip_samples) {
+void ffmpeg_set_skip_samples(ffmpeg_codec_data* data, int skip_samples) {
     AVStream *stream = NULL;
     if (!data || !data->formatCtx)
         return;
@@ -932,7 +922,7 @@ void ffmpeg_set_skip_samples(ffmpeg_codec_data * data, int skip_samples) {
 }
 
 /* returns channel layout if set */
-uint32_t ffmpeg_get_channel_layout(ffmpeg_codec_data * data) {
+uint32_t ffmpeg_get_channel_layout(ffmpeg_codec_data* data) {
     if (!data || !data->codecCtx) return 0;
     return (uint32_t)data->codecCtx->channel_layout; /* uint64 but there ain't so many speaker mappings */
 }
@@ -940,7 +930,7 @@ uint32_t ffmpeg_get_channel_layout(ffmpeg_codec_data * data) {
 /* yet another hack to fix codecs that encode channels in different order and reorder on decoder
  * but FFmpeg doesn't do it automatically
  * (maybe should be done via mixing, but could clash with other stuff?) */
-void ffmpeg_set_channel_remapping(ffmpeg_codec_data * data, int *channel_remap) {
+void ffmpeg_set_channel_remapping(ffmpeg_codec_data* data, int *channel_remap) {
     int i;
 
     if (data->channels > 32)
@@ -952,7 +942,7 @@ void ffmpeg_set_channel_remapping(ffmpeg_codec_data * data, int *channel_remap) 
     data->channel_remap_set = 1;
 }
 
-const char* ffmpeg_get_codec_name(ffmpeg_codec_data * data) {
+const char* ffmpeg_get_codec_name(ffmpeg_codec_data* data) {
     if (!data || !data->codec)
         return NULL;
     if (data->codec->long_name)
@@ -962,12 +952,12 @@ const char* ffmpeg_get_codec_name(ffmpeg_codec_data * data) {
     return NULL;
 }
 
-void ffmpeg_set_force_seek(ffmpeg_codec_data * data) {
+void ffmpeg_set_force_seek(ffmpeg_codec_data* data) {
     /* some formats like Smacker are so buggy that any seeking is impossible (even on video players),
      * or MPC with an incorrectly parsed seek table (using as 0 some non-0 seek offset).
      * whatever, we'll just kill and reconstruct FFmpeg's config every time */
     data->force_seek = 1;
-    reset_ffmpeg_internal(data); /* reset state from trying to seek */
+    reset_ffmpeg(data); /* reset state from trying to seek */
     //stream = data->formatCtx->streams[data->streamIndex];
 }
 
@@ -989,5 +979,9 @@ const char* ffmpeg_get_metadata_value(ffmpeg_codec_data* data, const char* key) 
     return avde->value;
 }
 
+STREAMFILE* ffmpeg_get_streamfile(ffmpeg_codec_data* data) {
+    if (!data) return NULL;
+    return data->streamfile;
+}
 #endif
 

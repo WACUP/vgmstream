@@ -54,10 +54,10 @@
 #endif
 
 #ifndef VERSIONW
-#define VERSIONW L"2.1.3093"
+#define VERSIONW L"2.1.3115"
 #endif
 
-#define LIBVGMSTREAM_BUILD "1050-3093-gc36ff74e-wacup"
+#define LIBVGMSTREAM_BUILD "1050-3115-g48cfd96b-wacup"
 #define APP_NAME "vgmstream plugin"
 #define PLUGIN_DESCRIPTION "vgmstream Decoder v" VERSION
 #define PLUGIN_DESCRIPTIONW L"vgmstream Decoder v" VERSIONW
@@ -103,10 +103,6 @@ int tagfile_disable = 0;
 int force_title = 0;
 int exts_unknown_on = 0;
 int exts_common_on = 0;
-
-// {B6CB4A7C-A8D0-4c55-8E60-9F7A7A23DA0F}
-static const GUID playbackConfigGroupGUID = 
-{ 0xb6cb4a7c, 0xa8d0, 0x4c55, { 0x8e, 0x60, 0x9f, 0x7a, 0x7a, 0x23, 0xda, 0xf } };
 
 /* Winamp needs at least 576 16-bit samples, stereo, doubled in case DSP effects are active */
 #define SAMPLE_BUFFER_SIZE 576
@@ -1729,7 +1725,7 @@ extern "C" __declspec(dllexport) intptr_t winampGetExtendedRead_openW(const wcha
 	return (intptr_t)ext_vgmstream;
 }
 
-extern "C" __declspec(dllexport) size_t winampGetExtendedRead_getData(intptr_t handle, char *dest, size_t len, int *killswitch)
+extern "C" __declspec(dllexport) intptr_t winampGetExtendedRead_getData(intptr_t handle, char *dest, size_t len, int *killswitch)
 {
 	const int max_buffer_samples = SAMPLE_BUFFER_SIZE;
 	const int max_samples = ext_stream_length_samples;
