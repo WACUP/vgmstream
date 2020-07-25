@@ -54,10 +54,10 @@
 #endif
 
 #ifndef VERSIONW
-#define VERSIONW L"2.1.3116"
+#define VERSIONW L"2.1.3120"
 #endif
 
-#define LIBVGMSTREAM_BUILD "1050-3116-g383748a1-wacup"
+#define LIBVGMSTREAM_BUILD "1050-3120-g241eb6fc-wacup"
 #define APP_NAME "vgmstream plugin"
 #define PLUGIN_DESCRIPTION "vgmstream Decoder v" VERSION
 #define PLUGIN_DESCRIPTIONW L"vgmstream Decoder v" VERSIONW
@@ -990,6 +990,8 @@ int play(const in_char *fn) {
     plugin.SAVSAInit(max_latency, vgmstream->sample_rate);
     plugin.VSASetInfo(vgmstream->sample_rate, output_channels);
 
+	plugin.outMod->SetVolume(-666);
+
     /* reset internals */
 	paused = 0;
     decode_abort = 0;
@@ -1246,7 +1248,10 @@ DWORD WINAPI __stdcall decode(void *arg) {
             decode_pos_samples += samples_to_do;
             decode_pos_ms = decode_pos_samples * 1000LL / vgmstream->sample_rate;
         }
-        else if (plugin.outMod->CanWrite() >= output_bytes) { /* decode */
+		// TODO double-check this but the change to output_bytes
+		//		get notsoyasapi working which didn't behave like
+		//		all other tested output plug-ins that I've tried
+        else if (plugin.outMod->CanWrite() >= samples_to_do/*output_bytes*/) { /* decode */
             render_vgmstream(sample_buffer, samples_to_do, vgmstream);
 
             /* fade near the end */
@@ -1282,7 +1287,7 @@ DWORD WINAPI __stdcall decode(void *arg) {
             decode_pos_ms = decode_pos_samples * 1000LL / vgmstream->sample_rate;
         }
         else { /* can't write right now */
-            Sleep(20);
+            Sleep(1);
         }
     }
 
