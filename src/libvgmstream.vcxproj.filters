@@ -47,6 +47,12 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="decode.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="render.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="mixing.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -236,7 +242,13 @@
     <ClInclude Include="..\ext_includes\clHCA.h">
       <Filter>ext_libs\Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="coding\mpeg_bitreader.h">
+      <Filter>coding\Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="coding\mpeg_decoder.h">
+      <Filter>coding\Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="coding\vorbis_bitreader.h">
       <Filter>coding\Header Files</Filter>
     </ClInclude>
     <ClInclude Include="coding\vorbis_custom_data_fsb.h">
@@ -266,6 +278,12 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="formats.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="decode.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="render.c">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="mixing.c">
@@ -394,6 +412,9 @@
     <ClCompile Include="meta\btsnd.c">
       <Filter>meta\Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="meta\bsf.c">
+      <Filter>meta\Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="meta\capdsp.c">
       <Filter>meta\Source Files</Filter>
     </ClCompile>
@@ -437,6 +458,9 @@
       <Filter>meta\Source Files</Filter>
     </ClCompile>
     <ClCompile Include="meta\dmsg_segh.c">
+      <Filter>meta\Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="meta\dsb.c">
       <Filter>meta\Source Files</Filter>
     </ClCompile>
     <ClCompile Include="meta\dsf.c">
@@ -1198,6 +1222,9 @@
     <ClCompile Include="meta\zwdsp.c">
       <Filter>meta\Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="meta\zwv.c">
+      <Filter>meta\Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="coding\acm_decoder.c">
       <Filter>coding\Source Files</Filter>
     </ClCompile>
@@ -1487,6 +1514,9 @@
       <Filter>meta\Source Files</Filter>
     </ClCompile>
     <ClCompile Include="meta\sgxd.c">
+      <Filter>meta\Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="meta\silence.c">
       <Filter>meta\Source Files</Filter>
     </ClCompile>
     <ClCompile Include="meta\ngca.c">

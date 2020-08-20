@@ -3,6 +3,9 @@
 
 #include "../vgmstream.h"
 
+VGMSTREAM* init_vgmstream_silence(int channels, int sample_rate, int32_t num_samples);
+
+
 VGMSTREAM * init_vgmstream_adx(STREAMFILE *streamFile);
 
 VGMSTREAM * init_vgmstream_afc(STREAMFILE *streamFile);
@@ -910,5 +913,11 @@ VGMSTREAM* init_vgmstream_pcm_success(STREAMFILE* sf);
 VGMSTREAM* init_vgmstream_ktsc(STREAMFILE* sf);
 
 VGMSTREAM* init_vgmstream_adp_konami(STREAMFILE* sf);
+
+VGMSTREAM* init_vgmstream_zwv(STREAMFILE* sf);
+
+VGMSTREAM* init_vgmstream_dsb(STREAMFILE* sf);
+
+VGMSTREAM* init_vgmstream_bsf(STREAMFILE* sf);
 
 #endif /*_META_H*/

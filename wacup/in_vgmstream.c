@@ -54,10 +54,10 @@
 #endif
 
 #ifndef VERSIONW
-#define VERSIONW L"2.1.3120"
+#define VERSIONW L"2.1.3230"
 #endif
 
-#define LIBVGMSTREAM_BUILD "1050-3120-g241eb6fc-wacup"
+#define LIBVGMSTREAM_BUILD "1050-3120-g709b8977-wacup"
 #define APP_NAME "vgmstream plugin"
 #define PLUGIN_DESCRIPTION "vgmstream Decoder v" VERSION
 #define PLUGIN_DESCRIPTIONW L"vgmstream Decoder v" VERSIONW
@@ -114,10 +114,10 @@ HANDLE decode_thread_handle = INVALID_HANDLE_VALUE;
 
 int paused = 0;
 int decode_abort = 0;
-int seek_needed_samples = -1;
+int seek_sample = -1;
 int decode_pos_ms = 0;
 int decode_pos_samples = 0;
-int stream_length_samples = 0;
+int length_samples = 0;
 int fade_samples = 0;
 int output_channels = 0;
 double volume = 1.0;
@@ -128,7 +128,7 @@ wchar_t lastfn[FILENAME_SIZE] = { 0 }; /* name of the currently playing file */
 
 /* ************************************* */
 
-/* converts from utf16 to utf8 (if unicode is active) */
+/* converts from utf16 to utf8 (if unicode is on) */
 static void wa_wchar_to_char(char *dst, size_t dstsize, const in_char *wsrc) {
     /* converto to UTF8 codepage, default separate bytes, source wstr, wstr lenght,  */
     //int size_needed = WideCharToMultiByte(CP_UTF8,0, src,-1, NULL,0, NULL, NULL);
@@ -159,30 +159,30 @@ static FILE* wa_fdopen(int fd) {
 typedef struct {
     STREAMFILE sf;
     STREAMFILE *stdiosf;
-	FILE *infile_ref; /* pointer to the infile in stdiosf (partially handled by stdiosf) */
+    FILE *infile_ref; /* pointer to the infile in stdiosf (partially handled by stdiosf) */
 } WINAMP_STREAMFILE;
 
 static STREAMFILE *open_winamp_streamfile_by_file(FILE *infile, const char * path);
 static STREAMFILE *open_winamp_streamfile_by_wpath(const in_char *wpath);
 
-static size_t wasf_read(WINAMP_STREAMFILE *streamfile, uint8_t *dest, off_t offset, size_t length) {
-    return streamfile->stdiosf->read(streamfile->stdiosf,dest,offset,length);
+static size_t wasf_read(WINAMP_STREAMFILE* sf, uint8_t* dest, off_t offset, size_t length) {
+    return sf->stdiosf->read(sf->stdiosf, dest, offset, length);
 }
 
-static off_t wasf_get_size(WINAMP_STREAMFILE *streamfile) {
-    return streamfile->stdiosf->get_size(streamfile->stdiosf);
+static off_t wasf_get_size(WINAMP_STREAMFILE* sf) {
+    return sf->stdiosf->get_size(sf->stdiosf);
 }
 
-static off_t wasf_get_offset(WINAMP_STREAMFILE *streamfile) {
-    return streamfile->stdiosf->get_offset(streamfile->stdiosf);
+static off_t wasf_get_offset(WINAMP_STREAMFILE* sf) {
+    return sf->stdiosf->get_offset(sf->stdiosf);
 }
 
-static void wasf_get_name(WINAMP_STREAMFILE *streamfile, char *buffer, size_t length) {
-    streamfile->stdiosf->get_name(streamfile->stdiosf, buffer, length);
+static void wasf_get_name(WINAMP_STREAMFILE* sf, char* buffer, size_t length) {
+    sf->stdiosf->get_name(sf->stdiosf, buffer, length);
 }
 
-static STREAMFILE *wasf_open(WINAMP_STREAMFILE *streamFile, const char *const filename, size_t buffersize) {
-	in_char wpath[FILENAME_SIZE] = { 0 };
+static STREAMFILE *wasf_open(WINAMP_STREAMFILE* sf, const char* const filename, size_t buffersize) {
+    in_char wpath[FILENAME_SIZE] = { 0 };
 
     if (!filename)
         return NULL;
@@ -192,22 +192,23 @@ static STREAMFILE *wasf_open(WINAMP_STREAMFILE *streamFile, const char *const fi
      * IO buffers when using dup(), noticeable by re-opening the same streamfile with small buffer sizes
      * (reads garbage). This reportedly causes issues in Android too */
 
-    /* if same name, duplicate the file pointer we already have open */ //unsure if all this is needed
+    /* if same name, duplicate the file descriptor we already have open */ //unsure if all this is needed
 	char name[FILENAME_SIZE] = { 0 };
-	streamFile->stdiosf->get_name(streamFile->stdiosf, name, FILENAME_SIZE);
-    if (!strcmp(name,filename)) {
-		int newfd;
-		FILE *newfile;
-        if (((newfd = dup(fileno(streamFile->infile_ref))) >= 0) &&
-            (newfile = wa_fdopen(newfd)))
-        {
-			STREAMFILE *newstreamFile = open_winamp_streamfile_by_file(newfile, filename);
-            if (newstreamFile) {
-                return newstreamFile;
-            }
-            // failure, close it and try the default path (which will probably fail a second time)
-            fclose(newfile);
+	sf->stdiosf->get_name(sf->stdiosf, name, FILENAME_SIZE);
+    if (sf->infile_ref && !strcmp(name,filename)) {
+        int new_fd;
+        FILE *new_file;
+
+        if (((new_fd = dup(fileno(sf->infile_ref))) >= 0) && (new_file = wa_fdopen(new_fd))) {
+            STREAMFILE *new_sf = open_winamp_streamfile_by_file(new_file, filename);
+            if (new_sf)
+                return new_sf;
+            fclose(new_file);
         }
+        if (new_fd >= 0 && !new_file)
+            close(new_fd); /* fdopen may fail when opening too many files */
+
+        /* on failure just close and try the default path (which will probably fail a second time) */
     }
 #endif
 
@@ -216,20 +217,20 @@ static STREAMFILE *wasf_open(WINAMP_STREAMFILE *streamFile, const char *const fi
     return open_winamp_streamfile_by_wpath(wpath);
 }
 
-static void wasf_close(WINAMP_STREAMFILE *streamfile) {
+static void wasf_close(WINAMP_STREAMFILE* sf) {
     /* closes infile_ref + frees in the internal STDIOSTREAMFILE (fclose for wchar is not needed) */
-    streamfile->stdiosf->close(streamfile->stdiosf);
-    free(streamfile); /* and the current struct */
+    sf->stdiosf->close(sf->stdiosf);
+    free(sf); /* and the current struct */
 }
 
-static STREAMFILE *open_winamp_streamfile_by_file(FILE *infile, const char * path) {
-    WINAMP_STREAMFILE *this_sf = NULL;
-    STREAMFILE *stdiosf = NULL;
+static STREAMFILE *open_winamp_streamfile_by_file(FILE* file, const char* path) {
+    WINAMP_STREAMFILE* this_sf = NULL;
+    STREAMFILE* stdiosf = NULL;
 
     this_sf = (WINAMP_STREAMFILE*)calloc(1,sizeof(WINAMP_STREAMFILE));
     if (!this_sf) goto fail;
 
-    stdiosf = open_stdio_streamfile_by_file(infile,path);
+    stdiosf = open_stdio_streamfile_by_file(file,path);
     if (!stdiosf) goto fail;
 
     this_sf->sf.read = (size_t (*)(struct _STREAMFILE *,uint8_t * dest, off_t offset, size_t length))wasf_read;
@@ -240,7 +241,7 @@ static STREAMFILE *open_winamp_streamfile_by_file(FILE *infile, const char * pat
     this_sf->sf.close = (void (*)(struct _STREAMFILE *))wasf_close;
 
     this_sf->stdiosf = stdiosf;
-    this_sf->infile_ref = infile;
+    this_sf->infile_ref = file;
 
     return &this_sf->sf; /* pointer to STREAMFILE start = rest of the custom data follows */
 
@@ -251,38 +252,42 @@ fail:
 }
 
 
-static STREAMFILE *open_winamp_streamfile_by_wpath(const in_char *wpath) {
-    FILE *infile = NULL;
-    STREAMFILE *streamFile;
-	char path[FILENAME_SIZE] = { 0 };
+static STREAMFILE* open_winamp_streamfile_by_wpath(const in_char* wpath) {
+    FILE* infile = NULL;
+    STREAMFILE* sf;
+    char path[FILENAME_SIZE] = { 0 };
 
     /* open a FILE from a Winamp (possibly UTF-16) path */
     infile = wa_fopen(wpath);
-    if (!infile) return NULL;
+    if (!infile) {
+        /* allow non-existing files in some cases */
+        if (!vgmstream_is_virtual_filename(path))
+            return NULL;
+    }
 
     /* convert to UTF-8 if needed for internal use */
 	wa_wchar_to_char(path, FILENAME_SIZE, wpath);
 
-    streamFile = open_winamp_streamfile_by_file(infile, path);
-    if (!streamFile) {
-        fclose(infile);
+    sf = open_winamp_streamfile_by_file(infile,path);
+    if (!sf) {
+        if (infile) fclose(infile);
     }
 
-    return streamFile;
+    return sf;
 }
 
 /* opens vgmstream for winamp */
-static VGMSTREAM* init_vgmstream_winamp(const in_char *fn, int stream_index) {
-    VGMSTREAM * vgmstream = NULL;
+static VGMSTREAM* init_vgmstream_winamp(const in_char* fn, int stream_index) {
+    VGMSTREAM* vgmstream = NULL;
 
     //return init_vgmstream(fn);
 
     /* manually init streamfile to pass the stream index */
-    STREAMFILE *streamFile = open_winamp_streamfile_by_wpath(fn); //open_stdio_streamfile(fn);
-    if (streamFile) {
-        streamFile->stream_index = stream_index;
-        vgmstream = init_vgmstream_from_STREAMFILE(streamFile);
-        close_streamfile(streamFile);
+    STREAMFILE* sf = open_winamp_streamfile_by_wpath(fn); //open_stdio_streamfile(fn);
+    if (sf) {
+        sf->stream_index = stream_index;
+        vgmstream = init_vgmstream_from_STREAMFILE(sf);
+        close_streamfile(sf);
     }
 
     return vgmstream;
@@ -608,9 +613,9 @@ static int split_subsongs(const in_char * filename, int stream_index, VGMSTREAM 
     /* The only way to pass info around in Winamp is encoding it into the filename, so a fake name
      * is created with the index. Then, winamp_Play (and related) intercepts and reads the index. */
     for (i = 0; i < vgmstream->num_streams; i++) {
-		in_char stream_fn[FILENAME_SIZE] = { 0 };
+        in_char stream_fn[FILENAME_SIZE] = { 0 };
 
-		make_fn_subsong(stream_fn, FILENAME_SIZE, filename, (i + 1)); /* encode index in filename */
+        make_fn_subsong(stream_fn, FILENAME_SIZE, filename, (i + 1)); /* encode index in filename */
 
         /* insert at index */
         {
@@ -631,7 +636,7 @@ static int split_subsongs(const in_char * filename, int stream_index, VGMSTREAM 
     /* remove current file from the playlist */
     SendMessage(hPlaylistWindow, WM_WA_IPC, IPC_PE_DELETEINDEX, playlist_index);
 
-    /* autoplay doesn't always advance to the first unpacked track, manually fails too */
+    /* autoplay doesn't always advance to the first unpacked track, but manually fails somehow */
     //SendMessage(input_module.hMainWindow,WM_WA_IPC,playlist_index,IPC_SETPLAYLISTPOS);
     //SendMessage(input_module.hMainWindow,WM_WA_IPC,0,IPC_STARTPLAY);
 
@@ -659,8 +664,7 @@ static int parse_fn_int(const in_char * fn, const in_char * tag, int * num) {
     if (start > 0) {
         swscanf(start + 1, L"$s=%i ", num);
         return 1;
-	}
-	else {
+    } else {
         *num = 0;
         return 0;
     }
@@ -668,24 +672,24 @@ static int parse_fn_int(const in_char * fn, const in_char * tag, int * num) {
 
 #if 0
 /* Adds ext to Winamp's extension list */
-static void add_extension(int length, char * dst, const char * ext) {
+static void add_extension(char* dst, int dst_len, const char *ext) {
     char buf[EXT_BUFFER_SIZE] = {0};
     char ext_upp[EXT_BUFFER_SIZE] = {0};
     int ext_len, written;
-    int i, j;
-    if (length <= 1)
+    int i,j;
+    if (dst_len <= 1)
         return;
 
     ext_len = strlen(ext);
 
     /* find end of dst (double \0), saved in i */
-    for (i = 0; i < length - 2 && (dst[i] || dst[i + 1]); i++)
+    for (i = 0; i < dst_len - 2 && (dst[i] || dst[i+1]); i++)
         ;
 
     /* check if end reached or not enough room to add */
-    if (i == length-2 || i + EXT_BUFFER_SIZE+2 > length-2 || ext_len * 3 + 20+2 > EXT_BUFFER_SIZE) {
+    if (i == dst_len - 2 || i + EXT_BUFFER_SIZE+2 > dst_len - 2 || ext_len * 3 + 20+2 > EXT_BUFFER_SIZE) {
         dst[i] = '\0';
-        dst[i + 1] = '\0';
+        dst[i+1] = '\0';
         return;
     }
 
@@ -703,7 +707,7 @@ static void add_extension(int length, char * dst, const char * ext) {
     for (j = 0; j < written; i++,j++)
         dst[i] = buf[j];
     dst[i] = '\0';
-    dst[i + 1] = '\0';
+    dst[i+1] = '\0';
 }
 #endif
 
@@ -717,7 +721,7 @@ static void build_extension_list() {
 	// which is not ideal when the filter list its used in
 	// can only go upto 260 characters so instead...
     /*for (i = 0; i < ext_list_len; i++) {
-        add_extension(EXTENSION_LIST_SIZE, working_extension_list, ext_list[i]);
+        add_extension(working_extension_list, EXTENSION_LIST_SIZE, ext_list[i]);
     }*/
 
 	// this version keeps it to one filter list entry with
@@ -742,11 +746,11 @@ static void build_extension_list() {
 /* unicode utils */
 static void get_title(in_char * dst, int dst_size, const in_char * fn, VGMSTREAM * infostream) {
     in_char *basename;
-	in_char buffer[FILENAME_SIZE] = { 0 };
-	in_char filename[FILENAME_SIZE] = { 0 };
+    in_char buffer[FILENAME_SIZE] = { 0 };
+    in_char filename[FILENAME_SIZE] = { 0 };
     int stream_index = 0;
 
-	parse_fn_string(fn, NULL, filename, FILENAME_SIZE);
+    parse_fn_string(fn, NULL, filename, FILENAME_SIZE);
     parse_fn_int(fn, L"$s", &stream_index);
 
     basename = (in_char*)filename + wcslen(filename); /* find end */
@@ -755,19 +759,19 @@ static void get_title(in_char * dst, int dst_size, const in_char * fn, VGMSTREAM
     ++basename;
     wcscpy(dst, basename);
 
-	/* infostream gets added at first with index 0, then once played it re-adds proper numbers */
-	if (infostream) {
-		const char* info_name = infostream->stream_name;
-		int info_streams = infostream->num_streams;
-		int info_subsong = infostream->stream_index;
-		int is_first = infostream->stream_index == 0;
+    /* infostream gets added at first with index 0, then once played it re-adds proper numbers */
+    if (infostream) {
+        const char* info_name = infostream->stream_name;
+        int info_streams = infostream->num_streams;
+        int info_subsong = infostream->stream_index;
+        int is_first = infostream->stream_index == 0;
 
-		/* show number if file has more than 1 subsong */
-		if (info_streams > 1) {
-			if (is_first)
-				_snwprintf(buffer, FILENAME_SIZE, L"#1~%i", info_streams);
-			else
-				_snwprintf(buffer, FILENAME_SIZE, L"#%i", info_subsong);
+        /* show number if file has more than 1 subsong */
+        if (info_streams > 1) {
+            if (is_first)
+                _snwprintf(buffer, FILENAME_SIZE, L"#1~%i", info_streams);
+            else
+                _snwprintf(buffer, FILENAME_SIZE, L"#%i", info_subsong);
         wcscat(dst, buffer);
     }
 
@@ -780,9 +784,9 @@ static void get_title(in_char * dst, int dst_size, const in_char * fn, VGMSTREAM
 
     /* show name, but not for the base stream */
     if (infostream && infostream->stream_name[0] != '\0' && stream_index > 0) {
-		in_char stream_name[FILENAME_SIZE] = { 0 };
-		wa_char_to_wchar(stream_name, FILENAME_SIZE, infostream->stream_name);
-		_snwprintf(buffer, FILENAME_SIZE, L" (%s)", stream_name);
+        in_char stream_name[FILENAME_SIZE] = { 0 };
+        wa_char_to_wchar(stream_name, FILENAME_SIZE, infostream->stream_name);
+        _snwprintf(buffer, FILENAME_SIZE, L" (%s)", stream_name);
         wcscat(dst, buffer);
     }
 }
@@ -797,10 +801,10 @@ static double get_album_gain_volume(const in_char *fn) {
     char replaygain[64];
     double gain = 0.0;
     int had_replaygain = 0;
-	const int gain_type = plugin.config->GetUnsigned(playbackConfigGroupGUID, L"replaygain_source", 0);
+    const int gain_type = plugin.config->GetUnsigned(playbackConfigGroupGUID, L"replaygain_source", 0);
 
     replaygain[0] = '\0'; /* reset each time to make sure we read actual tags */
-	if (gain_type == 1	// album
+    if (gain_type == 1	// album
             && winampGetExtendedFileInfo_common((in_char *)fn, "replaygain_album_gain", replaygain, sizeof(replaygain))
             && replaygain[0] != '\0') {
         gain = atof(replaygain);
@@ -820,13 +824,13 @@ static double get_album_gain_volume(const in_char *fn) {
         double peak = 1.0;
 
         replaygain[0] = '\0';
-		const int clip_type = plugin.config->GetUnsigned(playbackConfigGroupGUID, L"replaygain_mode", 1);
-		if (settings.clip_type == 1	// album
+        const int clip_type = plugin.config->GetUnsigned(playbackConfigGroupGUID, L"replaygain_mode", 1);
+        if (settings.clip_type == 1	// album
                 && winampGetExtendedFileInfo_common((in_char *)fn, "replaygain_album_peak", replaygain, sizeof(replaygain))
                 && replaygain[0] != '\0') {
             peak = atof(replaygain);
         }
-		else if (settings.clip_type == 0	// track
+        else if (settings.clip_type == 0	// track
                 && winampGetExtendedFileInfo_common((in_char *)fn, "replaygain_track_peak", replaygain, sizeof(replaygain))
                 && replaygain[0] != '\0') {
             peak = atof(replaygain);
@@ -844,18 +848,18 @@ static double get_album_gain_volume(const in_char *fn) {
 
 void about(HWND hwndParent)
 {
-	// TODO need to ensure that we keep the build # correct
+    // TODO need to ensure that we keep the build # correct
     AboutMessageBox(hwndParent, PLUGIN_DESCRIPTIONW L"\n\n"
-					L"Copyright © 2008-2020 hcs, FastElbja, manakoAT, bxaimc,\n"
-					L"snakemeat, soneek, kode54, bnnm and all other contributors.\n\n"
-					L"WACUP integration updates by Darren Owen aka DrO\n\n"
-					L"Build date: " TEXT(__DATE__) L"\n\n"
-					L"Using libvgmstream build: " TEXT(LIBVGMSTREAM_BUILD) L"\n\n\n"
-					L"This adds support for dozens of streamed ADPCM and other\n"
-					L"formats extracted from various console and PC video games.\n\n"
-					L"See https://hcs64.com/vgmstream.html for more information\n"
-					L"about the project, source code and alternative versions, etc.",
-					L"vgmstream Decoder");
+                    L"Copyright © 2008-2020 hcs, FastElbja, manakoAT, bxaimc,\n"
+                    L"snakemeat, soneek, kode54, bnnm and all other contributors.\n\n"
+                    L"WACUP integration updates by Darren Owen aka DrO\n\n"
+                    L"Build date: " TEXT(__DATE__) L"\n\n"
+                    L"Using libvgmstream build: " TEXT(LIBVGMSTREAM_BUILD) L"\n\n\n"
+                    L"This adds support for dozens of streamed ADPCM and other\n"
+                    L"formats extracted from various console and PC video games.\n\n"
+                    L"See https://hcs64.com/vgmstream.html for more information\n"
+                    L"about the project, source code and alternative versions, etc.",
+                    L"vgmstream Decoder");
 }
 
 /* loading optimisation to reduce initial blocking 
@@ -863,30 +867,30 @@ void about(HWND hwndParent)
 */
 void __cdecl GetFileExtensions(void)
 {
-	static bool loaded_extensions;
-	if (!loaded_extensions)
-	{
-		/* dynamically make a list of supported extensions */
-		build_extension_list();
-		plugin.FileExtensions = (char *)working_extension_list;
-		loaded_extensions = true;
-	}
+    static bool loaded_extensions;
+    if (!loaded_extensions)
+    {
+        /* dynamically make a list of supported extensions */
+        build_extension_list();
+        plugin.FileExtensions = (char *)working_extension_list;
+        loaded_extensions = true;
+    }
 }
 
 /* called at program init */
 int init(void) {
 	WASABI_API_LNG = plugin.language;
 
-	// need to have this initialised before we try to do anything with localisation features
-	/*WASABI_API_START_LANG(plugin.hDllInstance, InWvLangGuid);
+    // need to have this initialised before we try to do anything with localisation features
+    /*WASABI_API_START_LANG(plugin.hDllInstance, InWvLangGuid);
 
-	StringCchPrintf(pluginTitle, ARRAYSIZE(pluginTitle), WASABI_API_LNGSTRINGW(IDS_PLUGIN_NAME), PLUGIN_VERSION);
-	plugin.description = (char*)pluginTitle;*/
+    StringCchPrintf(pluginTitle, ARRAYSIZE(pluginTitle), WASABI_API_LNGSTRINGW(IDS_PLUGIN_NAME), PLUGIN_VERSION);
+    plugin.description = (char*)pluginTitle;*/
 
-	// TODO localise
-	plugin.description = (char*)PLUGIN_DESCRIPTIONW;
+    // TODO localise
+    plugin.description = (char*)PLUGIN_DESCRIPTIONW;
 
-	return IN_INIT_SUCCESS;
+    return IN_INIT_SUCCESS;
 }
 
 /* called at program quit */
@@ -896,13 +900,13 @@ void quit(void) {
 /* called before extension checks, to allow detection of mms://, etc */
 // TODO need to get this just working nicely with WACUP to avoid conflict
 int isourfile(const in_char *fn) {
-	if (fn && *fn && !PathIsURL(fn))
-	{
-		//const in_char *filename;
-    const in_char *extension;
+    if (fn && *fn && !PathIsURL(fn))
+    {
+        //const in_char *filename;
+        const in_char *extension;
 
-    /* get basename + extension */
-		//filename = fn;
+        /* get basename + extension */
+        //filename = fn;
 #if 0
     //must detect empty extensions in folders with . in the name; doesn't work ok?
     filename = wcsrrchr(fn, L'\\');
@@ -911,10 +915,10 @@ int isourfile(const in_char *fn) {
     else
         filename++;
 #endif
-		extension = wcsrchr(fn, L'.');
+        extension = wcsrchr(fn, L'.');
     if (extension == NULL)
-			//return 1; /* extensionless, try to play it */
-			return 0; /* extensionless, avoid playing it */
+            //return 1; /* extensionless, try to play it */
+            return 0; /* extensionless, avoid playing it */
     else
         extension++;
 
@@ -928,30 +932,30 @@ int isourfile(const in_char *fn) {
      * finally retry with "hi.mp3", accepted if exts_common_on is set. */
 
     /* returning 0 here means it only accepts the extensions in working_extension_list */
-		char filename_utf8[FILENAME_SIZE];
-		wa_wchar_to_char(filename_utf8, FILENAME_SIZE, fn);
-	return vgmstream_ctx_is_valid(filename_utf8, &cfg);
-}
-	return 0;
+        char filename_utf8[FILENAME_SIZE];
+        wa_wchar_to_char(filename_utf8, FILENAME_SIZE, fn);
+    return vgmstream_ctx_is_valid(filename_utf8, &cfg);
+    }
+    return 0;
 }
 
 /* request to start playing a file */
 int play(const in_char *fn) {
     int max_latency;
-	in_char filename[FILENAME_SIZE] = { 0 };
+    in_char filename[FILENAME_SIZE] = { 0 };
     int stream_index = 0;
 
-	read_config();
+    read_config();
 
     if (vgmstream)
-        return 1; // TODO: this should either pop up an error box or close the file
+        return 1;
 
     /* check for info encoded in the filename */
-	parse_fn_string(fn, NULL, filename, FILENAME_SIZE);
+    parse_fn_string(fn, NULL, filename, FILENAME_SIZE);
     parse_fn_int(filename, L"$s", &stream_index);
 
     /* open the stream */
-    vgmstream = init_vgmstream_winamp(filename, stream_index);
+    vgmstream = init_vgmstream_winamp(filename,stream_index);
     if (!vgmstream)
         return 1;
 
@@ -970,9 +974,12 @@ int play(const in_char *fn) {
     if (downmix_channels > 0 && downmix_channels < vgmstream->channels)
         output_channels = downmix_channels;
 
+    /* enable after all config but before outbuf (though ATM outbuf is not dynamic so no need to read input_channels) */
+//    vgmstream_mixing_autodownmix(vgmstream, downmix_channels);
+//    vgmstream_mixing_enable(vgmstream, SAMPLE_BUFFER_SIZE, NULL /*&input_channels*/, &output_channels);
 
     /* save original name */
-	wcsncpy(lastfn, filename, FILENAME_SIZE);
+    wcsncpy(lastfn, filename, FILENAME_SIZE);
 
     /* open the output plugin */
     max_latency = (plugin.outMod ? plugin.outMod->Open(vgmstream->sample_rate, output_channels, 16, -1, -1) : -1);
@@ -990,15 +997,15 @@ int play(const in_char *fn) {
     plugin.SAVSAInit(max_latency, vgmstream->sample_rate);
     plugin.VSASetInfo(vgmstream->sample_rate, output_channels);
 
-	plugin.outMod->SetVolume(-666);
+    plugin.outMod->SetVolume(-666);
 
     /* reset internals */
 	paused = 0;
     decode_abort = 0;
-    seek_needed_samples = -1;
+    seek_sample = -1;
     decode_pos_ms = 0;
     decode_pos_samples = 0;
-    stream_length_samples = get_vgmstream_play_samples(loop_count, fade_seconds, fade_delay_seconds, vgmstream);
+    length_samples = get_vgmstream_play_samples(loop_count, fade_seconds, fade_delay_seconds, vgmstream);
     fade_samples = (int)(fade_seconds * vgmstream->sample_rate);
 	volume = get_album_gain_volume(filename);
 
@@ -1012,12 +1019,12 @@ int play(const in_char *fn) {
 
     if (decode_thread_handle == 0 ||
         SetThreadPriority(decode_thread_handle, plugin.config->GetInt(playbackConfigGroupGUID, L"priority", THREAD_PRIORITY_HIGHEST)) == 0)
-	{
+    {
         close_vgmstream(vgmstream);
         vgmstream = NULL;
         return -1;
-	}
-	ResumeThread(decode_thread_handle);
+    }
+    ResumeThread(decode_thread_handle);
     return 0; /* success */
 }
 
@@ -1060,27 +1067,33 @@ void stop(void) {
 
 /* get length in ms */
 int getlength(void) {
-    return stream_length_samples * 1000LL / vgmstream->sample_rate;
+    return length_samples * 1000LL / vgmstream->sample_rate;
 }
 
 /* current output time in ms */
 int getoutputtime(void) {
-    return decode_pos_ms + (plugin.outMod->GetOutputTime() - plugin.outMod->GetWrittenTime());
+    int32_t pos_ms = decode_pos_ms;
+
+    /* pretend we have reached destination if called while seeking is on */
+    if (seek_sample >= 0)
+        pos_ms = seek_sample * 1000LL / vgmstream->sample_rate;
+
+    return pos_ms + (plugin.outMod->GetOutputTime() - plugin.outMod->GetWrittenTime());
 }
 
 /* seeks to point in stream (in ms) */
 void setoutputtime(int time_in_ms) {
     if (vgmstream)
-        seek_needed_samples = (long long)time_in_ms * vgmstream->sample_rate / 1000LL;
+        seek_sample = (long long)time_in_ms * vgmstream->sample_rate / 1000LL;
 }
 
 /* pass these commands through */
 void setvolume(int volume) {
-	plugin.outMod->SetVolume(volume);
+    plugin.outMod->SetVolume(volume);
 }
 
 void setpan(int pan) {
-	plugin.outMod->SetPan(pan);
+    plugin.outMod->SetPan(pan);
 }
 
 /* display info box (ALT+3) */
@@ -1093,30 +1106,30 @@ int infoDlg(const in_char *fn, HWND hwnd) {
 
     if (!fn || !*fn) {
         /* no filename = current playing file */
-		if (!vgmstream)
-		{
-			return INFOBOX_UNCHANGED;
-		}
+        if (!vgmstream)
+        {
+            return INFOBOX_UNCHANGED;
+        }
 
         describe_vgmstream(vgmstream, description, description_size);
     }
     else {
         /* some other file in playlist given by filename */
         VGMSTREAM * infostream = NULL;
-		in_char filename[FILENAME_SIZE] = { 0 };
+        in_char filename[FILENAME_SIZE] = { 0 };
         int stream_index = 0;
 
         /* check for info encoded in the filename */
-		parse_fn_string(fn, NULL, filename, FILENAME_SIZE);
+        parse_fn_string(fn, NULL, filename, FILENAME_SIZE);
         parse_fn_int(fn, L"$s", &stream_index);
 
         infostream = init_vgmstream_winamp(filename, stream_index);
-		if (!infostream)
-		{
-			return INFOBOX_UNCHANGED;
-		}
+        if (!infostream)
+        {
+            return INFOBOX_UNCHANGED;
+        }
 
-        describe_vgmstream(infostream, description, description_size);
+        describe_vgmstream(infostream,description,description_size);
 
         close_vgmstream(infostream);
         infostream = NULL;
@@ -1139,7 +1152,7 @@ void getfileinfo(const in_char *fn, in_char *title, int *length_in_ms){
             return;
 
         if (title) {
-            get_title(title, GETFILEINFO_TITLE_LENGTH, lastfn, vgmstream);
+            get_title(title,GETFILEINFO_TITLE_LENGTH, lastfn, vgmstream);
         }
 
         if (length_in_ms) {
@@ -1149,24 +1162,28 @@ void getfileinfo(const in_char *fn, in_char *title, int *length_in_ms){
     else {
         /* some other file in playlist given by filename */
         VGMSTREAM * infostream = NULL;
-		in_char filename[FILENAME_SIZE] = { 0 };
+        in_char filename[FILENAME_SIZE] = { 0 };
         int stream_index = 0;
 
         /* check for info encoded in the filename */
-		parse_fn_string(fn, NULL, filename, FILENAME_SIZE);
+        parse_fn_string(fn, NULL, filename, FILENAME_SIZE);
         parse_fn_int(fn, L"$s", &stream_index);
 
         infostream = init_vgmstream_winamp(filename, stream_index);
         if (!infostream) return;
 
+
+        vgmstream_mixing_autodownmix(infostream, downmix_channels);
+        vgmstream_mixing_enable(infostream, 0, NULL, NULL);
+
         if (title) {
-            get_title(title, GETFILEINFO_TITLE_LENGTH, fn, infostream);
+            get_title(title,GETFILEINFO_TITLE_LENGTH, fn, infostream);
         }
 
         if (length_in_ms) {
             *length_in_ms = -1000;
             if (infostream) {
-                const int num_samples = get_vgmstream_play_samples(loop_count, fade_seconds, fade_delay_seconds, infostream);
+                const int num_samples = vgmstream_get_samples(infostream);
                 *length_in_ms = num_samples * 1000LL /infostream->sample_rate;
             }
         }
@@ -1174,6 +1191,32 @@ void getfileinfo(const in_char *fn, in_char *title, int *length_in_ms){
         close_vgmstream(infostream);
         infostream = NULL;
     }
+}
+
+static void do_seek(VGMSTREAM* vgmstream) {
+    int play_forever = vgmstream_get_play_forever(vgmstream);
+    int this_seek_sample = seek_sample;  /* local due to threads/race conditions changing state->seek_sample elsewhere */
+
+    /* ignore seeking past file, can happen using the right (->) key, ok if playing forever */
+    if (this_seek_sample > length_samples && !play_forever) {
+		this_seek_sample = -1;
+        //state->seek_sample = state->length_samples;
+        //seek_sample = state->length_samples;
+
+        decode_pos_samples = length_samples;
+        decode_pos_ms = decode_pos_samples * 1000LL / vgmstream->sample_rate;
+        return;
+    }
+
+    /* could divide in N seeks (from pos) for slower files so cursor moves, but doesn't seem too necessary */
+    seek_vgmstream(vgmstream, this_seek_sample);
+
+    decode_pos_samples = this_seek_sample;
+    decode_pos_ms = decode_pos_samples * 1000LL / vgmstream->sample_rate;
+
+    /* different sample: other seek may have been requested during seek_vgmstream */
+    if (this_seek_sample == seek_sample)
+        seek_sample = -1;
 }
 
 /* the decode thread */
@@ -1185,78 +1228,49 @@ DWORD WINAPI __stdcall decode(void *arg) {
         int samples_to_do;
         int output_bytes;
 
-        if (decode_pos_samples + max_buffer_samples > stream_length_samples
+        if (decode_pos_samples + max_buffer_samples > length_samples
                 && (!loop_forever || !vgmstream->loop_flag))
-            samples_to_do = stream_length_samples - decode_pos_samples;
-        else
+            samples_to_do = length_samples - decode_pos_samples;
+            if (samples_to_do < 0) /* just in case */
+                samples_to_do = 0;
+        else {
             samples_to_do = max_buffer_samples;
-
-        /* seek setup (max samples to skip if still seeking, mark done) */
-        if (seek_needed_samples != -1) {
-            /* reset if we need to seek backwards */
-            if (seek_needed_samples < decode_pos_samples) {
-                reset_vgmstream(vgmstream);
-
-                if (ignore_loop)
-                    vgmstream->loop_flag = 0;
-
-                decode_pos_samples = 0;
-                decode_pos_ms = 0;
-            }
-
-            /* adjust seeking past file, can happen using the right (->) key
-             * (should be done here and not in SetOutputTime due to threads/race conditions) */
-            if (seek_needed_samples > max_samples) {
-                seek_needed_samples = max_samples;
-            }
-
-            /* adjust max samples to seek */
-            if (decode_pos_samples < seek_needed_samples) {
-                samples_to_do = seek_needed_samples - decode_pos_samples;
-                if (samples_to_do > max_buffer_samples)
-                    samples_to_do = max_buffer_samples;
-            }
-            else {
-                seek_needed_samples = -1;
-            }
-
-            /* flush Winamp buffers */
-            plugin.outMod->Flush((int)decode_pos_ms);
         }
 
         output_bytes = (samples_to_do * output_channels * sizeof(short));
         if (plugin.dsp_isactive())
             output_bytes = output_bytes * 2; /* Winamp's DSP may need double samples */
 
-        if (samples_to_do == 0) { /* track finished */
+        if (samples_to_do == 0 && seek_sample < 0) { /* track finished and not seeking */
             plugin.outMod->CanWrite();    /* ? */
             if (!plugin.outMod->IsPlaying()) {
                 PostMessage(plugin.hMainWindow, WM_WA_MPEG_EOF, 0,0); /* end */
-				if (decode_thread_handle)
-				{
-					CloseHandle(decode_thread_handle);
-					decode_thread_handle = 0;
-				}
+                if (decode_thread_handle)
+                {
+                    CloseHandle(decode_thread_handle);
+                    decode_thread_handle = 0;
+                }
                 return 0;
             }
             Sleep(10);
         }
-        else if (seek_needed_samples != -1) { /* seek */
-            render_vgmstream(sample_buffer, samples_to_do, vgmstream);
+        else if (seek_sample >= 0) { /* seek */
+            do_seek(vgmstream);
 
-            /* discard decoded samples and keep seeking */
-            decode_pos_samples += samples_to_do;
-            decode_pos_ms = decode_pos_samples * 1000LL / vgmstream->sample_rate;
+            /* flush Winamp buffers *after* fully seeking (allows to play
+               buffered samples while we seek, feels a bit snappier) */
+            if (seek_sample < 0)
+                plugin.outMod->Flush(decode_pos_ms);
         }
-		// TODO double-check this but the change to output_bytes
-		//		get notsoyasapi working which didn't behave like
-		//		all other tested output plug-ins that I've tried
+        // TODO double-check this but the change to output_bytes
+        //		get notsoyasapi working which didn't behave like
+        //		all other tested output plug-ins that I've tried
         else if (plugin.outMod->CanWrite() >= samples_to_do/*output_bytes*/) { /* decode */
             render_vgmstream(sample_buffer, samples_to_do, vgmstream);
 
             /* fade near the end */
             if (vgmstream->loop_flag && fade_samples > 0 && !loop_forever) {
-                int samples_into_fade = decode_pos_samples - (stream_length_samples - fade_samples);
+                int samples_into_fade = decode_pos_samples - (length_samples - fade_samples);
                 if (samples_into_fade + samples_to_do > 0) {
                     int j, k;
                     for (j = 0; j < samples_to_do; j++, samples_into_fade++) {
@@ -1287,7 +1301,7 @@ DWORD WINAPI __stdcall decode(void *arg) {
             decode_pos_ms = decode_pos_samples * 1000LL / vgmstream->sample_rate;
         }
         else { /* can't write right now */
-            Sleep(1);
+            Sleep(20);
         }
     }
 
@@ -1375,7 +1389,7 @@ extern "C" __declspec(dllexport) HWND winampAddUnifiedFileInfoPane(int n, const 
 
 typedef struct {
     int loaded;
-	in_char filename[FILENAME_SIZE]; /* tags are loaded for this file */
+    in_char filename[FILENAME_SIZE]; /* tags are loaded for this file */
     int tag_count;
 
     char keys[WINAMP_TAGS_ENTRY_MAX][WINAMP_TAGS_ENTRY_SIZE+1];
@@ -1389,10 +1403,10 @@ winamp_tags last_tags;
  * Winamp requests one tag at a time and may reask for the same tag several times */
 static void load_tagfile_info(in_char *filename) {
     STREAMFILE *tagFile = NULL;
-	in_char filename_clean[FILENAME_SIZE];
-	char filename_utf8[FILENAME_SIZE];
-	char tagfile_path_utf8[FILENAME_SIZE];
-	in_char tagfile_path_i[FILENAME_SIZE];
+    in_char filename_clean[FILENAME_SIZE];
+    char filename_utf8[FILENAME_SIZE];
+    char tagfile_path_utf8[FILENAME_SIZE];
+    in_char tagfile_path_i[FILENAME_SIZE];
     char *path;
 
 
@@ -1403,7 +1417,7 @@ static void load_tagfile_info(in_char *filename) {
     }
 
     /* clean extra part for subsong tags */
-	parse_fn_string(filename, NULL, filename_clean, FILENAME_SIZE);
+    parse_fn_string(filename, NULL, filename_clean, FILENAME_SIZE);
 
     if (wcscmp(last_tags.filename, filename_clean) == 0) {
         return; /* not changed, tags still apply */
@@ -1412,7 +1426,7 @@ static void load_tagfile_info(in_char *filename) {
     last_tags.loaded = 0;
 
     /* tags are now for this filename, find tagfile path */
-	wa_wchar_to_char(filename_utf8, FILENAME_SIZE, filename_clean);
+    wa_wchar_to_char(filename_utf8, FILENAME_SIZE, filename_clean);
     strcpy(tagfile_path_utf8,filename_utf8);
 
     path = strrchr(tagfile_path_utf8,'\\');
@@ -1423,7 +1437,7 @@ static void load_tagfile_info(in_char *filename) {
     else { /* ??? */
         strncpy(tagfile_path_utf8,AutoChar(tagfile_name),ARRAYSIZE(tagfile_path_utf8));
     }
-	wa_char_to_wchar(tagfile_path_i, FILENAME_SIZE, tagfile_path_utf8);
+    wa_char_to_wchar(tagfile_path_i, FILENAME_SIZE, tagfile_path_utf8);
 
     wcsncpy(last_tags.filename, filename_clean, ARRAYSIZE(last_tags.filename));
     last_tags.tag_count = 0;
@@ -1434,7 +1448,7 @@ static void load_tagfile_info(in_char *filename) {
         const char *tag_key, *tag_val;
         int i;
 
-		VGMSTREAM_TAGS *tags = vgmstream_tags_init(&tag_key, &tag_val);
+        VGMSTREAM_TAGS *tags = vgmstream_tags_init(&tag_key, &tag_val);
         vgmstream_tags_reset(tags, filename_utf8);
         while (vgmstream_tags_next_tag(tags, tagFile)) {
             int repeated_tag = 0;
@@ -1476,36 +1490,36 @@ static int winampGetExtendedFileInfo_common(in_char *filename, char *metadata, c
 
     /* load list current tags, if necessary */
     load_tagfile_info(filename);
-	if (!last_tags.loaded) { /* tagfile not found, fail so default get_title takes over */
-		// this needs to be returned where possible
-		// otherwise a slew of things will fail to
-		// work as expected (e.g. waveform seeker)
-		if (strcasecmp(metadata, "length") == 0) {
-			goto get_length;
-		}
-		goto fail;
-	}
+    if (!last_tags.loaded) { /* tagfile not found, fail so default get_title takes over */
+        // this needs to be returned where possible
+        // otherwise a slew of things will fail to
+        // work as expected (e.g. waveform seeker)
+        if (strcasecmp(metadata, "length") == 0) {
+            goto get_length;
+        }
+        goto fail;
+    }
 
     /* always called (value in ms), must return ok so other tags get called */
     if (strcasecmp(metadata, "length") == 0) {
 get_length:
         //strcpy(ret, "0");//todo should export but shows GetFileInfo's ms if not provided
-		char *fn = AutoCharDup(filename);
-		if (fn)
-		{
-			VGMSTREAM * infostream = init_vgmstream(fn);
-			if (!infostream)
-			{
-				free(fn);
-			}
-			else
-			{
-				_itoa_s(get_vgmstream_play_samples(loop_count, fade_seconds, fade_delay_seconds, infostream) *
-						1000LL / infostream->sample_rate, ret, retlen, 10);
-				close_vgmstream(infostream);
-				infostream = NULL;
-			}
-		}
+        char *fn = AutoCharDup(filename);
+        if (fn)
+        {
+            VGMSTREAM * infostream = init_vgmstream(fn);
+            if (!infostream)
+            {
+                free(fn);
+            }
+            else
+            {
+                _itoa_s(get_vgmstream_play_samples(loop_count, fade_seconds, fade_delay_seconds, infostream) *
+                        1000LL / infostream->sample_rate, ret, retlen, 10);
+                close_vgmstream(infostream);
+                infostream = NULL;
+            }
+        }
         return 1;
     }
 
@@ -1526,8 +1540,8 @@ get_length:
     if (!tag_found && strcasecmp(metadata, "title") == 0) {
         in_char ret_wchar[2048] = {0};
 
-		getfileinfo(filename, ret_wchar, NULL);
-		wa_wchar_to_char(ret, retlen, ret_wchar);
+        getfileinfo(filename, ret_wchar, NULL);
+        wa_wchar_to_char(ret, retlen, ret_wchar);
         return 1;
     }
 

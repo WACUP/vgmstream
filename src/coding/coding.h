@@ -464,7 +464,12 @@ void free_mp4_aac(mp4_aac_codec_data* data);
 
 #ifdef VGM_USE_MAIATRAC3PLUS
 /* at3plus_decoder */
-typedef struct maiatrac3plus_codec_data maiatrac3plus_codec_data;
+typedef struct  {
+	sample_t* buffer;
+	int channels;
+	int samples_discard;
+	void* handle;
+} maiatrac3plus_codec_data;
 
 maiatrac3plus_codec_data* init_at3plus();
 void decode_at3plus(VGMSTREAM* vgmstream, sample * outbuf, int channelspacing, int32_t samples_to_do, int channel);
@@ -603,19 +608,6 @@ size_t atrac3plus_bytes_to_samples(size_t bytes, int full_block_align);
 size_t ac3_bytes_to_samples(size_t bytes, int full_block_align, int channels);
 size_t aac_get_samples(STREAMFILE* sf, off_t start_offset, size_t bytes);
 size_t mpeg_get_samples(STREAMFILE* sf, off_t start_offset, size_t bytes);
-
-
-/* An internal struct to pass around and simulate a bitstream. */
-typedef enum { BITSTREAM_MSF, BITSTREAM_VORBIS } vgm_bitstream_t;
-typedef struct {
-    uint8_t* buf;          /* buffer to read/write*/
-    size_t bufsize;         /* max size of the buffer */
-    off_t b_off;            /* current offset in bits inside the buffer */
-    vgm_bitstream_t mode;   /* read/write modes */
-} vgm_bitstream;
-
-int r_bits(vgm_bitstream* ib, int num_bits, uint32_t* value);
-int w_bits(vgm_bitstream* ob, int num_bits, uint32_t value);
 
 
 /* helper to pass a wrapped, clamped, fake extension-ed, SF to another meta */
