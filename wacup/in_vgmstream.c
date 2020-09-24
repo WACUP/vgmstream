@@ -54,10 +54,10 @@
 #endif
 
 #ifndef VERSIONW
-#define VERSIONW L"2.1.3270"
+#define VERSIONW L"2.1.3275"
 #endif
 
-#define LIBVGMSTREAM_BUILD "1050-3270-g44c668d8-wacup"
+#define LIBVGMSTREAM_BUILD "1050-3275-g2cb1be6a-wacup"
 #define APP_NAME "vgmstream plugin"
 #define PLUGIN_DESCRIPTION "vgmstream Decoder v" VERSION
 #define PLUGIN_DESCRIPTIONW L"vgmstream Decoder v" VERSIONW
@@ -1067,18 +1067,21 @@ void stop(void) {
 
 /* get length in ms */
 int getlength(void) {
-    return length_samples * 1000LL / vgmstream->sample_rate;
+    return (vgmstream ? length_samples * 1000LL / vgmstream->sample_rate : 0);
 }
 
 /* current output time in ms */
 int getoutputtime(void) {
-    int32_t pos_ms = decode_pos_ms;
+	if (vgmstream) {
+		int32_t pos_ms = decode_pos_ms;
 
-    /* pretend we have reached destination if called while seeking is on */
-    if (seek_sample >= 0)
-        pos_ms = seek_sample * 1000LL / vgmstream->sample_rate;
+		/* pretend we have reached destination if called while seeking is on */
+		if (seek_sample >= 0)
+			pos_ms = seek_sample * 1000LL / vgmstream->sample_rate;
 
-    return pos_ms + (plugin.outMod->GetOutputTime() - plugin.outMod->GetWrittenTime());
+		return pos_ms + (plugin.outMod->GetOutputTime() - plugin.outMod->GetWrittenTime());
+	}
+	return 0;
 }
 
 /* seeks to point in stream (in ms) */
