@@ -54,10 +54,10 @@
 #endif
 
 #ifndef VERSIONW
-#define VERSIONW L"2.1.3275"
+#define VERSIONW L"2.1.3283"
 #endif
 
-#define LIBVGMSTREAM_BUILD "1050-3275-g2cb1be6a-wacup"
+#define LIBVGMSTREAM_BUILD "1050-3283-g6c9de061-wacup"
 #define APP_NAME "vgmstream plugin"
 #define PLUGIN_DESCRIPTION "vgmstream Decoder v" VERSION
 #define PLUGIN_DESCRIPTIONW L"vgmstream Decoder v" VERSIONW
