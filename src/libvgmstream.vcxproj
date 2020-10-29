@@ -126,6 +126,7 @@
     <ClInclude Include="meta\kma9_streamfile.h" />
     <ClInclude Include="meta\lrmd_streamfile.h" />
     <ClInclude Include="meta\ppst_streamfile.h" />
+    <ClInclude Include="meta\ps2_enth_streamfile.h" />
     <ClInclude Include="meta\vsv_streamfile.h" />
     <ClInclude Include="meta\xavs_streamfile.h" />
     <ClInclude Include="meta\xnb_streamfile.h" />
@@ -239,7 +240,7 @@
     <ClCompile Include="meta\sgxd.c" />
     <ClCompile Include="meta\silence.c" />
     <ClCompile Include="meta\sk_aud.c" />
-    <ClCompile Include="meta\vawx.c" />
+    <ClCompile Include="meta\xwav.c" />
     <ClCompile Include="meta\seg.c" />
     <ClCompile Include="meta\sfh.c" />
     <ClCompile Include="meta\sqex_scd.c" />
@@ -412,7 +413,6 @@
     <ClCompile Include="meta\ogg_vorbis.c" />
     <ClCompile Include="meta\ogl.c" />
     <ClCompile Include="meta\omu.c" />
-    <ClCompile Include="meta\opus_ppp.c" />
     <ClCompile Include="meta\otm.c" />
     <ClCompile Include="meta\p3d.c" />
     <ClCompile Include="meta\raw_al.c" />
@@ -544,6 +544,7 @@
     <ClCompile Include="meta\vsf_tta.c" />
     <ClCompile Include="meta\vxn.c" />
     <ClCompile Include="meta\ubi_jade.c" />
+    <ClCompile Include="meta\wady.c" />
     <ClCompile Include="meta\waf.c" />
     <ClCompile Include="meta\wave_segmented.c" />
     <ClCompile Include="meta\wave.c" />
@@ -637,6 +638,7 @@
     <ClCompile Include="coding\vorbis_custom_utils_sk.c" />
     <ClCompile Include="coding\vorbis_custom_utils_vid1.c" />
     <ClCompile Include="coding\vorbis_custom_utils_wwise.c" />
+    <ClCompile Include="coding\wady_decoder.c" />
     <ClCompile Include="coding\ws_decoder.c" />
     <ClCompile Include="coding\xa_decoder.c" />
     <ClCompile Include="coding\xmd_decoder.c" />
@@ -649,7 +651,7 @@
     <ClCompile Include="layout\blocked_vgs.c" />
     <ClCompile Include="layout\blocked_vid1.c" />
     <ClCompile Include="layout\blocked_vs_square.c" />
-    <ClCompile Include="layout\blocked_vawx.c" />
+    <ClCompile Include="layout\blocked_xwav.c" />
     <ClCompile Include="layout\blocked_xvag.c" />
     <ClCompile Include="layout\blocked_caf.c" />
     <ClCompile Include="layout\blocked_dec.c" />

@@ -54,10 +54,10 @@
 #endif
 
 #ifndef VERSIONW
-#define VERSIONW L"2.1.3283"
+#define VERSIONW L"2.1.3328"
 #endif
 
-#define LIBVGMSTREAM_BUILD "1050-3283-g6c9de061-wacup"
+#define LIBVGMSTREAM_BUILD "1050-3283-g395c7eb7-wacup"
 #define APP_NAME "vgmstream plugin"
 #define PLUGIN_DESCRIPTION "vgmstream Decoder v" VERSION
 #define PLUGIN_DESCRIPTIONW L"vgmstream Decoder v" VERSIONW
@@ -637,8 +637,7 @@ static int split_subsongs(const in_char * filename, int stream_index, VGMSTREAM 
     SendMessage(hPlaylistWindow, WM_WA_IPC, IPC_PE_DELETEINDEX, playlist_index);
 
     /* autoplay doesn't always advance to the first unpacked track, but manually fails somehow */
-    //SendMessage(input_module.hMainWindow,WM_WA_IPC,playlist_index,IPC_SETPLAYLISTPOS);
-    //SendMessage(input_module.hMainWindow,WM_WA_IPC,0,IPC_STARTPLAY);
+    //SendMessage(input_module.hMainWindow,WM_WA_IPC,playlist_index,IPC_SETANDPLAYLISTPOS);
 
     return 1;
 }

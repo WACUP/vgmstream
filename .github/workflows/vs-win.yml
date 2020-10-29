@@ -1,0 +1,121 @@
+# This is a basic workflow to help you get started with Actions
+
+name: Windows VS 2017
+
+# Controls when the action will run. Triggers the workflow on push or pull request
+# events but only for the master branch
+on: [push, pull_request]
+
+# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+jobs:
+  # This workflow contains a single job called "build"
+  build:
+    # The type of runner that the job will run on
+    runs-on: windows-2016
+
+    # Steps represent a sequence of tasks that will be executed as part of the job
+    steps:
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - uses: actions/checkout@v2
+
+      - name: Fetch Git tags
+        shell: cmd
+        run: git fetch --prune --unshallow --tags
+        
+      - name: Initialize Build Environment
+        shell: cmd
+        run: powershell -ExecutionPolicy Bypass -NoProfile -File .\build.ps1 Init
+
+      - name: Generate Build Files for Jansson 
+        working-directory: ${{github.workspace}}
+        shell: cmd
+        run: |
+          cd dependencies\jansson\
+          mkdir build
+          cd build
+          cmake .. -DJANSSON_BUILD_SHARED_LIBS=ON -DJANSSON_EXAMPLES=OFF -DJANSSON_BUILD_DOCS=OFF -G "Visual Studio 15 2017" -T "v141_xp"
+
+      # Runs a single command using the runners shell
+      - name: Build
+        shell: cmd
+        run: powershell -ExecutionPolicy Bypass -NoProfile -File .\build.ps1 Build
+      
+      - name: Prepare Files For Packaging
+        shell: powershell
+        run: |
+          $fb2kFiles = @(
+              "ext_libs/*.dll",
+              "ext_libs/*.dll.asc",
+              "Release/foo_input_vgmstream.dll",
+              "README.md"
+          )
+
+          $cliFiles = @(
+              "ext_libs/*.dll",
+              "Release/in_vgmstream.dll",
+              "Release/test.exe",
+              "Release/xmp-vgmstream.dll",
+              "dependencies/jansson/build/bin/Release/jansson.dll",
+              "COPYING",
+              "README.md"
+          )
+
+          $fb2kPdbFiles = @(
+              "Release/foo_input_vgmstream.pdb"
+          )
+
+          $cliPdbFiles = @(
+              "Release/in_vgmstream.pdb",
+              "Release/test.pdb",
+              "Release/xmp-vgmstream.pdb"
+          )
+          
+          mkdir tmp/cli
+          mkdir tmp/fb2k
+          mkdir tmp/cli-p
+          mkdir tmp/fb2k-p
+          
+          Copy-Item $cliFiles tmp/cli/ -Recurse -Force
+          Copy-Item $fb2kFiles tmp/fb2k/ -Recurse -Force
+          Copy-Item $cliPdbFiles tmp/cli-p/ -Recurse -Force
+          Copy-Item $fb2kPdbFiles tmp/fb2k-p/ -Recurse -Force
+        
+      - name: Upload foobar2000 Component Artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: foo_input_vgmstream.fb2k-component
+          path: ${{github.workspace}}\tmp\fb2k
+            
+      - name: Upload CLI Tools Artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: test
+          path: ${{github.workspace}}\tmp\cli
+            
+      - name: Upload foobar2000 Component Debug Symbols Artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: foo_input_vgmstream.pdb
+          path: ${{github.workspace}}\tmp\fb2k-p
+            
+      - name: Upload CLI Tools Debug Symbols Artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: test.pdb
+          path: ${{github.workspace}}\tmp\cli-p
+          
+      - name: Upload Artifacts to S3
+        if: github.event_name != 'pull_request'
+        working-directory: ${{github.workspace}}
+        shell: powershell
+        env:
+            AWS_DEFAULT_REGION: us-west-1
+            AWS_ACCESS_KEY_ID: ${{secrets.AWS_ACCESS_KEY_ID}}
+            AWS_SECRET_ACCESS_KEY: ${{secrets.AWS_SECRET_ACCESS_KEY}}
+        run: |
+          aws s3 cp Release\test.zip s3://vgmstream-builds/${{github.sha}}/windows/ --acl public-read 
+          aws s3 cp Release\foo_input_vgmstream.fb2k-component s3://vgmstream-builds/${{github.sha}}/windows/ --acl public-read 
+          aws s3 cp Release\test.pdb.zip s3://vgmstream-builds/${{github.sha}}/windows/ --acl public-read 
+          aws s3 cp Release\foo_input_vgmstream.pdb.zip s3://vgmstream-builds/${{github.sha}}/windows/ --acl public-read 
+          echo ${{github.sha}} > latest_id
+          aws s3 cp latest_id s3://vgmstream-builds/ --acl public-read

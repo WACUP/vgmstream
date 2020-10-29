@@ -181,11 +181,12 @@ typedef enum {
     coding_SDX2,            /* SDX2 2:1 Squareroot-Delta-Exact compression DPCM */
     coding_SDX2_int,        /* SDX2 2:1 Squareroot-Delta-Exact compression with sample-level interleave */
     coding_CBD2,            /* CBD2 2:1 Cuberoot-Delta-Exact compression DPCM */
-    coding_CBD2_int,        /* CBD2 2:1 Cuberoot-Delta-Exact compression, with sample-level interleave  */
+    coding_CBD2_int,        /* CBD2 2:1 Cuberoot-Delta-Exact compression, with sample-level interleave */
     coding_SASSC,           /* Activision EXAKT SASSC 8-bit DPCM */
     coding_DERF,            /* DERF 8-bit DPCM */
+    coding_WADY,            /* WADY 8-bit DPCM */
+    coding_NWA,             /* VisualArt's NWA DPCM */
     coding_ACM,             /* InterPlay ACM */
-    coding_NWA,             /* VisualArt's NWA */
     coding_CIRCUS_ADPCM,    /* Circus 8-bit ADPCM */
     coding_UBI_ADPCM,       /* Ubisoft 4/6-bit ADPCM */
 
@@ -275,7 +276,7 @@ typedef enum {
     layout_blocked_ea_sns,  /* newest Electronic Arts blocks, found in SNS/SNU/SPS/etc formats */
     layout_blocked_awc,     /* Rockstar AWC */
     layout_blocked_vgs,     /* Guitar Hero II (PS2) */
-    layout_blocked_vawx,    /* No More Heroes 6ch (PS3) */
+    layout_blocked_xwav,
     layout_blocked_xvag_subsong, /* XVAG subsongs [God of War III (PS4)] */
     layout_blocked_ea_wve_au00, /* EA WVE au00 blocks */
     layout_blocked_ea_wve_ad10, /* EA WVE Ad10 blocks */
@@ -608,9 +609,7 @@ typedef enum {
     meta_OGL,               /* Shin'en Wii/WiiU (Jett Rocket (Wii), FAST Racing NEO (WiiU)) */
     meta_MC3,               /* Paradigm games (T3 PS2, MX Rider PS2, MI: Operation Surma PS2) */
     meta_GTD,               /* Knights Contract (X360/PS3), Valhalla Knights 3 (PSV) */
-    meta_TA_AAC_X360,       /* tri-Ace AAC (Star Ocean 4, End of Eternity, Infinite Undiscovery) */
-    meta_TA_AAC_PS3,        /* tri-Ace AAC (Star Ocean International, Resonance of Fate) */
-    meta_TA_AAC_MOBILE,     /* tri-Ace AAC (Star Ocean Anamnesis, Heaven x Inferno) */
+    meta_TA_AAC,
     meta_MTA2,
     meta_NGC_ULW,           /* Burnout 1 (GC only) */
     meta_XA_XA30,
@@ -660,10 +659,9 @@ typedef enum {
     meta_TXTP,              /* generic text playlist */
     meta_SMC_SMH,           /* Wangan Midnight (System 246) */
     meta_PPST,              /* PPST [Parappa the Rapper (PSP)] */
-    meta_OPUS_PPP,          /* .at9 Opus [Penny-Punching Princess (Switch)] */
+    meta_SPS_N1,
     meta_UBI_BAO,           /* Ubisoft BAO */
     meta_DSP_SWITCH_AUDIO,  /* Gal Gun 2 (Switch) */
-    meta_TA_AAC_VITA,       /* tri-Ace AAC (Judas Code) */
     meta_H4M,               /* Hudson HVQM4 video [Resident Evil 0 (GC), Tales of Symphonia (GC)] */
     meta_ASF,               /* Argonaut ASF [Croc 2 (PC)] */
     meta_XMD,               /* Konami XMD [Silent Hill 4 (Xbox), Castlevania: Curse of Darkness (Xbox)] */
@@ -743,6 +741,8 @@ typedef enum {
     meta_PCM_SUCCESS,
     meta_ADP_KONAMI,
     meta_SDRH,
+    meta_WADY,
+    meta_DSP_SQEX,
 } meta_t;
 
 /* standard WAVEFORMATEXTENSIBLE speaker positions */

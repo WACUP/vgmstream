@@ -167,7 +167,6 @@ VGMSTREAM* (*init_vgmstream_functions[])(STREAMFILE* sf) = {
     init_vgmstream_seg,
     init_vgmstream_nds_strm_ffta2,
     init_vgmstream_str_asr,
-    init_vgmstream_zwdsp,
     init_vgmstream_gca,
     init_vgmstream_spt_spd,
     init_vgmstream_ish_isd,
@@ -319,11 +318,7 @@ VGMSTREAM* (*init_vgmstream_functions[])(STREAMFILE* sf) = {
     init_vgmstream_ogl,
     init_vgmstream_mc3,
     init_vgmstream_gtd,
-    init_vgmstream_ta_aac_x360,
-    init_vgmstream_ta_aac_ps3,
-    init_vgmstream_ta_aac_mobile,
-    init_vgmstream_ta_aac_mobile_vorbis,
-    init_vgmstream_ta_aac_vita,
+    init_vgmstream_ta_aac,
     init_vgmstream_va3,
     init_vgmstream_mta2,
     init_vgmstream_mta2_container,
@@ -393,7 +388,7 @@ VGMSTREAM* (*init_vgmstream_functions[])(STREAMFILE* sf) = {
     init_vgmstream_txtp,
     init_vgmstream_smc_smh,
     init_vgmstream_ppst,
-    init_vgmstream_opus_sps_n1_segmented,
+    init_vgmstream_sps_n1_segmented,
     init_vgmstream_ubi_bao_pk,
     init_vgmstream_ubi_bao_atomic,
     init_vgmstream_dsp_switch_audio,
@@ -511,6 +506,8 @@ VGMSTREAM* (*init_vgmstream_functions[])(STREAMFILE* sf) = {
     init_vgmstream_bsf,
     init_vgmstream_xse_new,
     init_vgmstream_xse_old,
+    init_vgmstream_wady,
+    init_vgmstream_dsp_sqex,
 
     /* lowest priority metas (should go after all metas, and TXTH should go before raw formats) */
     init_vgmstream_txth,            /* proper parsers should supersede TXTH, once added */
@@ -522,6 +519,7 @@ VGMSTREAM* (*init_vgmstream_functions[])(STREAMFILE* sf) = {
     init_vgmstream_raw_pcm,         /* .raw raw PCM */
     init_vgmstream_s14_sss,         /* .s14/sss raw siren14 */
     init_vgmstream_raw_al,          /* .al/al2 raw A-LAW */
+    init_vgmstream_zwdsp,           /* fake format */
 #ifdef VGM_USE_FFMPEG
     init_vgmstream_ffmpeg,          /* may play anything incorrectly, since FFmpeg doesn't check extensions */
 #endif

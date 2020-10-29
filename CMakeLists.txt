@@ -2,12 +2,6 @@ cmake_minimum_required(VERSION 3.5)
 project(vgmstream C)
 enable_language(CXX)
 
-# TODO: Figure out why MinGW-w64 doesn't build
-
-if(MINGW)
-	message(FATAL_ERROR "Cannot currently build with MinGW")
-endif()
-
 get_directory_property(hasParent PARENT_DIRECTORY)
 if(hasParent)
   set(VGM_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR} PARENT_SCOPE)
@@ -111,6 +105,17 @@ else()
 		endif()
 	endif()
 
+	# Only build JSON dumping capabilities on Linux
+	pkg_check_modules(JANSSON jansson>=2.3)
+	if (JANSSON_FOUND)
+		set(USE_JANSSON ON)
+		set(JANSSON_PKG libjansson)
+		include_directories(${JANSSON_INCLUDE_DIRS})
+		link_directories(${JANSSON_LIBRARY_DIRS})
+	else (JANSSON_FOUND)
+		set(USE_JANSSON OFF)
+	endif (JANSSON_FOUND)
+
 	# If building Audacious, we need to make sure we can find its pkg-config module as well as GTK's
 	if(BUILD_AUDACIOUS)
 		include(FindPkgConfig)
@@ -119,6 +124,7 @@ else()
 		pkg_search_module(GTK REQUIRED gtk+-3.0 gtk+-2.0)
 	endif()
 endif()
+
 
 # Set compiler flags
 if(CMAKE_CXX_COMPILER_ID MATCHES Clang OR CMAKE_CXX_COMPILER_ID MATCHES GNU)
@@ -230,11 +236,13 @@ message(STATUS "        Building")
 message(STATUS "=========================")
 if(WIN32)
 	message(STATUS "                 CLI: ${BUILD_CLI}")
+	message(STATUS "        JSON dumping: ${USE_JANSSON}")
 	message(STATUS "foobar2000 component: ${BUILD_FB2K}")
 	message(STATUS "       Winamp plugin: ${BUILD_WINAMP}")
 	message(STATUS "       XMPlay plugin: ${BUILD_XMPLAY}")
 else()
 	message(STATUS "CLI/vgmstream123: ${BUILD_CLI}")
+	message(STATUS "    JSON dumping: ${USE_JANSSON}")
 	message(STATUS "Audacious plugin: ${BUILD_AUDACIOUS}")
 endif()
 message(STATUS "")

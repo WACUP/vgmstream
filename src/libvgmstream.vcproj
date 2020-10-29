@@ -349,6 +349,10 @@
                     >
                 </File>
                 <File
+                    RelativePath=".\meta\ps2_enth_streamfile.h"
+                    >
+                </File>
+                <File
                     RelativePath=".\meta\vsv_streamfile.h"
                     >
                 </File>
@@ -1126,10 +1130,6 @@
                     RelativePath=".\meta\omu.c"
                     >
                 </File>
-                <File
-                    RelativePath=".\meta\opus_ppp.c"
-                    >
-                </File>
 				<File
 					RelativePath=".\meta\otm.c"
 					>
@@ -1527,7 +1527,7 @@
                     >
                 </File>
 				<File
-					RelativePath=".\meta\vawx.c"
+					RelativePath=".\meta\xwav.c"
 					>
 				</File>
 				<File
@@ -1784,6 +1784,10 @@
                 </File>
                 <File
                     RelativePath=".\meta\ubi_jade.c"
+                    >
+                </File>
+                <File
+                    RelativePath=".\meta\wady.c"
                     >
                 </File>
                 <File
@@ -2283,6 +2287,10 @@
                     >
                 </File>
 				<File
+					RelativePath=".\coding\wady_decoder.c"
+					>
+				</File>
+				<File
 					RelativePath=".\coding\ws_decoder.c"
 					>
 				</File>
@@ -2371,7 +2379,7 @@
                     >
                 </File>
                 <File
-                    RelativePath=".\layout\blocked_vawx.c"
+                    RelativePath=".\layout\blocked_xwav.c"
                     >
                 </File>
                 <File
