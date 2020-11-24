@@ -22,7 +22,7 @@
 #endif
 
 #ifdef HAVE_JSON
-#include "jansson.h"
+#include "jansson/jansson.h"
 #endif
 
 /* low values are ok as there is very little performance difference, but higher
@@ -386,11 +386,16 @@ static void print_tags(cli_config* cfg) {
 
 static void print_title(VGMSTREAM* vgmstream, cli_config* cfg) {
     char title[1024];
+    vgmstream_title_t tcfg = {0};
 
     if (!cfg->show_title)
         return;
 
-    vgmstream_get_title(title, sizeof(title), cfg->infilename, vgmstream, NULL);
+    tcfg.force_title = 0;
+    tcfg.subsong_range = 0;
+    tcfg.remove_extension = 0;
+
+    vgmstream_get_title(title, sizeof(title), cfg->infilename, vgmstream, &tcfg);
 
     printf("title: %s\n", title);
 }

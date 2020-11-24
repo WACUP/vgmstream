@@ -22,10 +22,8 @@
 #include <pstdint.h>
 #endif
 
-#if (_MSC_VER < 1900)
-#ifndef inline 
-#define inline _inline
-#endif
+#if (_MSC_VER < 1800) && !defined(__cplusplus)
+#define inline __inline
 #endif
 
 #define strcasecmp _stricmp

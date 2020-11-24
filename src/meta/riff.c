@@ -347,8 +347,9 @@ VGMSTREAM* init_vgmstream_riff(STREAMFILE* sf) {
      * .at9: standard ATRAC9
      * .saf: Whacked! (Xbox)
      * .mwv: Level-5 games [Dragon Quest VIII (PS2), Rogue Galaxy (PS2)]
+     * .ima: Baja: Edge of Control (PS3/X360)
      */
-    if ( check_extensions(sf, "wav,lwav,xwav,da,dax,cd,med,snd,adx,adp,xss,xsew,adpcm,adw,wd,,sbv,wvx,str,at3,rws,aud,at9,saf") ) {
+    if ( check_extensions(sf, "wav,lwav,xwav,da,dax,cd,med,snd,adx,adp,xss,xsew,adpcm,adw,wd,,sbv,wvx,str,at3,rws,aud,at9,saf,ima") ) {
         ;
     }
     else if ( check_extensions(sf, "mwv") ) {
@@ -412,6 +413,9 @@ VGMSTREAM* init_vgmstream_riff(STREAMFILE* sf) {
 
         else if (codec == 0x0011 && (riff_size / 2 / 2 == read_32bitLE(0x30,sf))) /* riff_size = pcm_size (always stereo, has fact at 0x30) */
             riff_size = file_size - 0x08; /* [Asphalt 6 (iOS)] (sfx/memory wavs have ok sizes?) */
+
+        else if (codec == 0xFFFE && riff_size + 0x08 + 0x30 == file_size)
+            riff_size += 0x30; /* [E.X. Troopers (PS3)] (adds "ver /eBIT/tIME/mrkr" empty chunks but RIFF size wasn't updated) */
     }
 
     /* check for truncated RIFF */

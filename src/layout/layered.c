@@ -35,7 +35,7 @@ void render_vgmstream_layered(sample_t* outbuf, int32_t sample_count, VGMSTREAM*
             samples_to_do = sample_count - samples_written;
 
         if (samples_to_do <= 0) { /* when decoding more than num_samples */
-            VGM_LOG("LAYERED: samples_to_do 0\n");
+            VGM_LOG_ONCE("LAYERED: samples_to_do 0\n");
             goto decode_fail;
         }
 
@@ -75,6 +75,18 @@ decode_fail:
     memset(outbuf + samples_written * data->output_channels, 0, (sample_count - samples_written) * data->output_channels * sizeof(sample_t));
 }
 
+
+void seek_layout_layered(VGMSTREAM* vgmstream, int32_t seek_sample) {
+    int layer;
+    layered_layout_data* data = vgmstream->layout_data;
+
+    for (layer = 0; layer < data->layer_count; layer++) {
+        seek_vgmstream(data->layers[layer], seek_sample);
+    }
+
+    vgmstream->current_sample = seek_sample;
+    vgmstream->samples_into_block = seek_sample;
+}
 
 void loop_layout_layered(VGMSTREAM* vgmstream, int32_t loop_sample) {
     int layer;

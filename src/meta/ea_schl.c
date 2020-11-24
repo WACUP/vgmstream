@@ -17,12 +17,13 @@
 #define EA_PLATFORM_MAC         0x03
 #define EA_PLATFORM_SAT         0x04
 #define EA_PLATFORM_PS2         0x05
-#define EA_PLATFORM_GC_WII      0x06
+#define EA_PLATFORM_GC          0x06 /* also used on Wii */
 #define EA_PLATFORM_XBOX        0x07
 #define EA_PLATFORM_GENERIC     0x08 /* typically Wii/X360/PS3/videos */
 #define EA_PLATFORM_X360        0x09
 #define EA_PLATFORM_PSP         0x0A
 #define EA_PLATFORM_PS3         0x0E /* very rare [Need for Speed: Carbon (PS3)] */
+#define EA_PLATFORM_WII         0x10
 #define EA_PLATFORM_3DS         0x14
 
 /* codec constants (undefined are probably reserved, ie.- sx.exe encodes PCM24/DVI but no platform decodes them) */
@@ -59,6 +60,7 @@
 //#define EA_CODEC2_S24BE_INT     0x15 /* not used */
 #define EA_CODEC2_MT5           0x16
 #define EA_CODEC2_EALAYER3      0x17
+//#define EA_CODEC2_ATRAC3        0x1A /* not seen so far */
 #define EA_CODEC2_ATRAC3PLUS    0x1B
 
 /* Block headers, SCxy - where x is block ID and y is endianness flag (always 'l'?) */
@@ -136,6 +138,7 @@ VGMSTREAM* init_vgmstream_ea_schl(STREAMFILE* sf) {
      * .asf: ~early (audio stream file?) [ex. Need for Speed II (PC)]
      * .lasf: fake for plugins
      * .str: ~early [ex. FIFA 98 (PS1), FIFA 2002 (PS1)]
+     * .chk: ~early [ex. NBA Live 98 (PS1)]
      * .eam: ~mid?
      * .exa: ~mid [ex. 007 - From Russia with Love]
      * .sng: ~late (FIFA games)
@@ -149,7 +152,7 @@ VGMSTREAM* init_vgmstream_ea_schl(STREAMFILE* sf) {
      * .gsf: 007 - Everything or Nothing (GC)
      * .mus: map/mpf+mus only?
      * (extensionless): SSX (PS2) (inside .big) */
-    if (!check_extensions(sf,"asf,lasf,str,eam,exa,sng,aud,sx,xa,strm,stm,hab,xsf,gsf,mus,"))
+    if (!check_extensions(sf,"asf,lasf,str,chk,eam,exa,sng,aud,sx,xa,strm,stm,hab,xsf,gsf,mus,"))
         goto fail;
 
     /* check header */
@@ -298,11 +301,11 @@ fail:
 /* streamed assets are stored externally in AST file (mostly seen in earlier 6th-gen games) */
 VGMSTREAM * init_vgmstream_ea_abk(STREAMFILE* sf) {
     int bnk_target_stream, is_dupe, total_sounds = 0, target_stream = sf->stream_index;
-    off_t bnk_offset, header_table_offset, base_offset, value_offset, table_offset, entry_offset, target_entry_offset, schl_offset, schl_loop_offset;
-    uint32_t i, j, k, num_sounds, total_sound_tables;
-    uint16_t num_tables;
-    uint8_t sound_type, num_entries;
-    off_t sound_table_offsets[0x2000];
+    off_t bnk_offset, modules_table, module_data, player_offset, samples_table, entry_offset, target_entry_offset, schl_offset, schl_loop_offset;
+    uint32_t i, j, k, num_sounds, num_sample_tables;
+    uint16_t num_modules;
+    uint8_t sound_type, num_players;
+    off_t sample_tables[0x400];
     STREAMFILE * astData = NULL;
     VGMSTREAM * vgmstream = NULL;
     segmented_layout_data *data_s = NULL;
@@ -329,11 +332,11 @@ VGMSTREAM * init_vgmstream_ea_abk(STREAMFILE* sf) {
     if (target_stream < 0)
         goto fail;
 
-    num_tables = read_16bit(0x0A, sf);
-    header_table_offset = read_32bit(0x1C, sf);
+    num_modules = read_16bit(0x0A, sf);
+    modules_table = read_32bit(0x1C, sf);
     bnk_offset = read_32bit(0x20, sf);
     target_entry_offset = 0;
-    total_sound_tables = 0;
+    num_sample_tables = 0;
 
     /* check to avoid clashing with the newer ABK format */
     if (bnk_offset &&
@@ -341,19 +344,19 @@ VGMSTREAM * init_vgmstream_ea_abk(STREAMFILE* sf) {
         read_32bitBE(bnk_offset, sf) != EA_BNK_HEADER_BE)
         goto fail;
 
-    for (i = 0; i < num_tables; i++) {
-        num_entries = read_8bit(header_table_offset + 0x24, sf);
-        base_offset = read_32bit(header_table_offset + 0x2C, sf);
-        if (num_entries == 0xff) goto fail; /* EOF read */
+    for (i = 0; i < num_modules; i++) {
+        num_players = read_8bit(modules_table + 0x24, sf);
+        module_data = read_32bit(modules_table + 0x2C, sf);
+        if (num_players == 0xff) goto fail; /* EOF read */
 
-        for (j = 0; j < num_entries; j++) {
-            value_offset = read_32bit(header_table_offset + 0x3C + 0x04 * j, sf);
-            table_offset = read_32bit(base_offset + value_offset + 0x04, sf);
+        for (j = 0; j < num_players; j++) {
+            player_offset = read_32bit(modules_table + 0x3C + 0x04 * j, sf);
+            samples_table = read_32bit(module_data + player_offset + 0x04, sf);
 
-            /* For some reason, there are duplicate entries pointing at the same sound tables */
+            /* multiple players may point at the same sound table */
             is_dupe = 0;
-            for (k = 0; k < total_sound_tables; k++) {
-                if (table_offset == sound_table_offsets[k]) {
+            for (k = 0; k < num_sample_tables; k++) {
+                if (samples_table == sample_tables[k]) {
                     is_dupe = 1;
                     break;
                 }
@@ -362,12 +365,12 @@ VGMSTREAM * init_vgmstream_ea_abk(STREAMFILE* sf) {
             if (is_dupe)
                 continue;
 
-            sound_table_offsets[total_sound_tables++] = table_offset;
-            num_sounds = read_32bit(table_offset, sf);
+            sample_tables[num_sample_tables++] = samples_table;
+            num_sounds = read_32bit(samples_table, sf);
             if (num_sounds == 0xffffffff) goto fail; /* EOF read */
 
             for (k = 0; k < num_sounds; k++) {
-                entry_offset = table_offset + 0x04 + 0x0C * k;
+                entry_offset = samples_table + 0x04 + 0x0C * k;
                 sound_type = read_8bit(entry_offset + 0x00, sf);
 
                 /* some of these are dummies pointing at sound 0 in BNK */
@@ -380,16 +383,17 @@ VGMSTREAM * init_vgmstream_ea_abk(STREAMFILE* sf) {
             }
         }
 
-        /* there can be another set of values, don't know what they mean */
-        num_entries += read_8bit(header_table_offset + 0x27, sf);
-        header_table_offset += 0x3C + num_entries * 0x04;
+        /* skip class controllers */
+        num_players += read_8bit(modules_table + 0x27, sf);
+        modules_table += 0x3C + num_players * 0x04;
     }
 
     if (target_entry_offset == 0)
         goto fail;
 
     /* 0x00: type (0x00 - normal, 0x01 - streamed, 0x02 - streamed looped) */
-    /* 0x01: ??? */
+    /* 0x01: priority */
+    /* 0x02: padding */
     /* 0x04: index for normal sounds, offset for streamed sounds */
     /* 0x08: loop offset for streamed sounds */
     sound_type = read_8bit(target_entry_offset + 0x00, sf);
@@ -450,18 +454,9 @@ VGMSTREAM * init_vgmstream_ea_abk(STREAMFILE* sf) {
                 goto fail;
 
             /* build the VGMSTREAM */
-            vgmstream = allocate_vgmstream(data_s->segments[0]->channels, 1);
-            if (!vgmstream) goto fail;
-
-            vgmstream->sample_rate = data_s->segments[0]->sample_rate;
-            vgmstream->num_samples = data_s->segments[0]->num_samples + data_s->segments[1]->num_samples;
-            vgmstream->loop_start_sample = data_s->segments[0]->num_samples;
-            vgmstream->loop_end_sample = vgmstream->num_samples;
-
-            vgmstream->meta_type = meta_EA_SCHL;
-            vgmstream->coding_type = data_s->segments[0]->coding_type;
-            vgmstream->layout_type = layout_segmented;
-            vgmstream->layout_data = data_s;
+            vgmstream = allocate_segmented_vgmstream(data_s, 1, 1, 1);
+            if (!vgmstream)
+                goto fail;
             break;
 
         default:
@@ -573,10 +568,11 @@ VGMSTREAM * init_vgmstream_ea_hdr_dat_v2(STREAMFILE* sf) {
     /* 0x02: parameters (userdata size, ...) */
     /* 0x03: number of files */
     /* 0x04: sub-ID (used for different police voices in NFS games) */
-    /* 0x08: alt number of files? */
-    /* 0x09: offset mult */
-    /* 0x0a: DAT size divided by offset mult */
-    /* 0x0c: zero */
+    /* 0x08: sample repeat (alt number of files?) */
+    /* 0x09: block size (offset multiplier) */
+    /* 0x0A: number of blocks (DAT size divided by block size) */
+    /* 0x0C: number of sub-banks (always zero?) */
+    /* 0x0E: padding */
     /* 0x10: table start */
 
     /* no nice way to validate these so we do what we can */
@@ -638,13 +634,8 @@ static STREAMFILE* open_mapfile_pair(STREAMFILE* sf, int track, int num_tracks) 
         {"mus_ctrl.mpf",    "mus_str.mus"}, /* GoldenEye - Rogue Agent (others) */
         {"AKA_Mus.mpf",     "Track.mus"}, /* Boogie */
         {"SSX4FE.mpf",      "TrackFE.mus"}, /* SSX On Tour */
-        {"SSX4Path.mpf",    "Track.mus"}, /* SSX On Tour */
+        {"SSX4Path.mpf",    "Track.mus"},
         {"SSX4.mpf",        "moments0.mus,main.mus,load_loop0.mus"}, /* SSX Blur */
-        {"willow.mpf",      "willow.mus,willow_o.mus"}, /* Harry Potter and the Chamber of Secrets */
-        {"exterior.mpf",    "exterior.mus,ext_o.mus"}, /* Harry Potter and the Chamber of Secrets */ 
-        {"Peak1Amb.mpf",    "Peak1_Strm.mus,Peak1_Ovr0.mus"}, /* SSX 3 */
-        {"Peak2Amb.mpf",    "Peak2_Strm.mus,Peak2_Ovr0.mus"},
-        {"Peak3Amb.mpf",    "Peak3_Strm.mus,Peak3_Ovr0.mus"},
         {"*.mpf",            "*_main.mus"}, /* 007 - Everything or Nothing */
         /* TODO: need better wildcard support
          * NSF2:
@@ -666,6 +657,10 @@ static STREAMFILE* open_mapfile_pair(STREAMFILE* sf, int track, int num_tracks) 
     int pair_count = (sizeof(mapfile_pairs)/sizeof(mapfile_pairs[0]));
     int i, j;
     size_t file_len, map_len;
+
+    /* try parsing TXTM if present */
+    sf_mus = read_filemap_file(sf, track);
+    if (sf_mus) return sf_mus;
 
     /* if loading the first track, try opening MUS with the same name first (most common scenario) */
     if (track == 0) {
@@ -793,6 +788,7 @@ VGMSTREAM * init_vgmstream_ea_map_mus(STREAMFILE* sf) {
         goto fail;
 
     vgmstream->num_streams = num_sounds;
+    get_streamfile_filename(sf_mus, vgmstream->stream_name, STREAM_NAME_SIZE);
     close_streamfile(sf_mus);
     return vgmstream;
 
@@ -805,12 +801,12 @@ fail:
 VGMSTREAM * init_vgmstream_ea_mpf_mus(STREAMFILE* sf) {
     VGMSTREAM* vgmstream = NULL;
     STREAMFILE* sf_mus = NULL;
-    off_t tracks_table, samples_table, section_offset, entry_offset, eof_offset, off_mult, sound_offset;
-    uint32_t track_start, track_hash = 0;
+    segmented_layout_data *data_s = NULL;
+    uint32_t track_start, track_end = 0, track_hash = 0, tracks_table, samples_table = 0, section_offset, entry_offset = 0, eof_offset = 0, off_mult, sound_offset;
     uint16_t num_nodes;
-    uint8_t version, sub_version, num_tracks, num_sections, num_events, num_routers, num_vars, subentry_num;
-    int32_t(*read_32bit)(off_t, STREAMFILE*);
-    int16_t(*read_16bit)(off_t, STREAMFILE*);
+    uint8_t version, sub_version, num_tracks, num_sections, num_events, num_routers, num_vars, subentry_num = 0;
+    uint32_t(*read_u32)(off_t, STREAMFILE*);
+    uint16_t(*read_u16)(off_t, STREAMFILE*);
     int i;
     int target_stream = sf->stream_index, total_streams, big_endian, is_bnk = 0;
 
@@ -820,29 +816,29 @@ VGMSTREAM * init_vgmstream_ea_mpf_mus(STREAMFILE* sf) {
 
     /* detect endianness */
     if (read_32bitBE(0x00, sf) == 0x50464478) { /* "PFDx" */
-        read_32bit = read_32bitBE;
-        read_16bit = read_16bitBE;
+        read_u32 = read_u32be;
+        read_u16 = read_u16be;
         big_endian = 1;
     } else if (read_32bitLE(0x00, sf) == 0x50464478) { /* "xDFP" */
-        read_32bit = read_32bitLE;
-        read_16bit = read_16bitLE;
+        read_u32 = read_u32le;
+        read_u16 = read_u16le;
         big_endian = 0;
     } else {
         goto fail;
     }
 
-    version = read_8bit(0x04, sf);
-    sub_version = read_8bit(0x05, sf);
+    version = read_u8(0x04, sf);
+    sub_version = read_u8(0x05, sf);
 
     if (version < 3 || version > 5) goto fail;
     if (version == 5 && sub_version > 2) goto fail; /* newer version using SNR/SNS */
 
-    num_tracks = read_8bit(0x0d, sf);
-    num_sections = read_8bit(0x0e, sf);
-    num_events = read_8bit(0x0f, sf);
-    num_routers = read_8bit(0x10, sf);
-    num_vars = read_8bit(0x11, sf);
-    num_nodes = read_16bit(0x12, sf);
+    num_tracks = read_u8(0x0d, sf);
+    num_sections = read_u8(0x0e, sf);
+    num_events = read_u8(0x0f, sf);
+    num_routers = read_u8(0x10, sf);
+    num_vars = read_u8(0x11, sf);
+    num_nodes = read_u16(0x12, sf);
 
     /* HACK: number of sub-entries for nodes and events is stored in bitstreams that are different in LE and BE */
     /* I can't figure it out, so let's just use a workaround for now */
@@ -852,109 +848,123 @@ VGMSTREAM * init_vgmstream_ea_mpf_mus(STREAMFILE* sf) {
     if (version == 3)
         /* SSX Tricky (v3.1), Harry Potter and the Chamber of Secrets (v3.4) */  {
         /* we need to go through all the sections to get to the samples table */
+        if (sub_version != 1 && sub_version != 2 && sub_version != 4)
+            goto fail;
+
         /* get the last entry offset */
         section_offset = 0x24;
-        entry_offset = (uint16_t)read_16bit(section_offset + (num_nodes - 1) * 0x02, sf) * 0x04;
-        if (sub_version == 1) {
-            subentry_num = read_8bit(entry_offset + 0x0b, sf);
+        entry_offset = read_u16(section_offset + (num_nodes - 1) * 0x02, sf) * 0x04;
+        if (sub_version == 1 || sub_version == 2) {
+            subentry_num = read_u8(entry_offset + 0x0b, sf);
         } else if (sub_version == 4) {
             if (big_endian) {
-                subentry_num = (read_32bitBE(entry_offset + 0x04, sf) >> 19) & 0xFF;
+                subentry_num = (read_u32be(entry_offset + 0x04, sf) >> 19) & 0xFF;
             } else {
-                subentry_num = (read_32bitBE(entry_offset + 0x04, sf) >> 16) & 0xFF;
+                subentry_num = (read_u32be(entry_offset + 0x04, sf) >> 16) & 0xFF;
             }
-        } else {
-            goto fail;
         }
         section_offset = entry_offset + 0x0c + subentry_num * 0x04;
 
         section_offset += align_size_to_block(num_events * num_tracks * num_sections, 0x04);
         section_offset += num_routers * 0x04;
         section_offset += num_vars * 0x04;
-        tracks_table = read_32bit(section_offset, sf) * 0x04;
-        samples_table = tracks_table + (num_tracks + 1) * 0x04;
+
+        tracks_table = read_u32(section_offset, sf) * 0x04;
+        if (sub_version == 1 || sub_version == 2)
+            samples_table = tracks_table + num_tracks * 0x04;
+        else if (sub_version == 4)
+            samples_table = tracks_table + (num_tracks + 1) * 0x04;
+        if (sub_version == 1 || sub_version == 2)
+            eof_offset = get_streamfile_size(sf);
+        else if (sub_version == 4)
+            eof_offset = read_u32(tracks_table + num_tracks * 0x04, sf) * 0x04;
+        total_streams = (eof_offset - samples_table) / 0x08;
+        off_mult = 0x04;
+
+        track_start = total_streams;
 
         for (i = num_tracks - 1; i >= 0; i--) {
-            track_start = read_32bit(tracks_table + i * 0x04, sf) * 0x04;
+            track_end = track_start;
+            track_start = read_u32(tracks_table + i * 0x04, sf) * 0x04;
             track_start = (track_start - samples_table) / 0x08;
             if (track_start <= target_stream - 1)
                 break;
         }
-
-        eof_offset = read_32bit(tracks_table + num_tracks * 0x04, sf) * 0x04;
-        total_streams = (eof_offset - samples_table) / 0x08;
-        off_mult = 0x04;
     } else if (version == 4) {
         /* Need for Speed: Underground 2, SSX 3, Harry Potter and the Prisoner of Azkaban */
         /* we need to go through all the sections to get to the samples table */
         /* get the last entry offset */
         section_offset = 0x20;
-        entry_offset = (uint16_t)read_16bit(section_offset + (num_nodes - 1) * 0x02, sf) * 0x04;
+        entry_offset = read_u16(section_offset + (num_nodes - 1) * 0x02, sf) * 0x04;
         if (big_endian) {
-            subentry_num = (read_32bitBE(entry_offset + 0x04, sf) >> 15) & 0xFF;
+            subentry_num = (read_u32be(entry_offset + 0x04, sf) >> 15) & 0xFF;
         } else {
-            subentry_num = (read_32bitBE(entry_offset + 0x04, sf) >> 20) & 0xFF;
+            subentry_num = (read_u32be(entry_offset + 0x04, sf) >> 20) & 0xFF;
         }
         section_offset = entry_offset + 0x10 + subentry_num * 0x04;
 
         /* get the last entry offset */
-        entry_offset = (uint16_t)read_16bit(section_offset + (num_events - 1) * 0x02, sf) * 0x04;
+        entry_offset = read_u16(section_offset + (num_events - 1) * 0x02, sf) * 0x04;
         if (big_endian) {
-            subentry_num = (read_32bitBE(entry_offset + 0x0c, sf) >> 10) & 0xFF;
+            subentry_num = (read_u32be(entry_offset + 0x0c, sf) >> 10) & 0xFF;
         } else {
-            subentry_num = (read_32bitBE(entry_offset + 0x0c, sf) >> 8) & 0xFF;
+            subentry_num = (read_u32be(entry_offset + 0x0c, sf) >> 8) & 0xFF;
         }
         section_offset = entry_offset + 0x10 + subentry_num * 0x10;
 
         /* TODO: verify this */
-        section_offset = read_32bit(section_offset, sf) * 0x04;
+        section_offset = read_u32(section_offset, sf) * 0x04;
         section_offset += num_routers * 0x04;
         section_offset += num_vars * 0x04;
+
         tracks_table = section_offset;
         samples_table = tracks_table + (num_tracks + 1) * 0x04;
+        eof_offset = read_u32(tracks_table + num_tracks * 0x04, sf) * 0x04;
+        total_streams = (eof_offset - samples_table) / 0x08;
+        off_mult = 0x80;
+
+        track_start = total_streams;
 
         for (i = num_tracks - 1; i >= 0; i--) {
-            track_start = read_32bit(tracks_table + i * 0x04, sf) * 0x04;
+            track_end = track_start;
+            track_start = read_u32(tracks_table + i * 0x04, sf) * 0x04;
             track_start = (track_start - samples_table) / 0x08;
             if (track_start <= target_stream - 1)
                 break;
         }
-
-        eof_offset = read_32bit(tracks_table + num_tracks * 0x04, sf) * 0x04;
-        total_streams = (eof_offset - samples_table) / 0x08;
-        off_mult = 0x80;
     } else if (version == 5) {
         /* Need for Speed: Most Wanted, Need for Speed: Carbon */
-        tracks_table = read_32bit(0x2c, sf);
-        samples_table = read_32bit(0x34, sf);
+        tracks_table = read_u32(0x2c, sf);
+        samples_table = read_u32(0x34, sf);
+        eof_offset = read_u32(0x38, sf);
+        total_streams = (eof_offset - samples_table) / 0x08;
+        off_mult = 0x80;
+
+        track_start = total_streams;
 
         for (i = num_tracks - 1; i >= 0; i--) {
-            entry_offset = read_32bit(tracks_table + i * 0x04, sf) * 0x04;
-            track_start = read_32bit(entry_offset + 0x00, sf);
+            track_end = track_start;
+            entry_offset = read_u32(tracks_table + i * 0x04, sf) * 0x04;
+            track_start = read_u32(entry_offset + 0x00, sf);
+
+            if (track_start == 0 && i != 0)
+                continue; /* empty track */
 
             if (track_start <= target_stream - 1) {
-                track_hash = read_32bitBE(entry_offset + 0x08, sf);
+                track_hash = read_u32be(entry_offset + 0x08, sf);
                 is_bnk = (track_hash == 0xF1F1F1F1);
 
                 /* checks to distinguish it from SNR/SNS version */
                 if (is_bnk) {
-                    if (read_32bitBE(entry_offset + 0x0c, sf) == 0x00)
+                    if (read_u32(entry_offset + 0x0c, sf) == 0x00)
                         goto fail;
-
-                    track_hash = read_32bitBE(entry_offset + 0x14, sf);
-                    if (track_hash == 0xF1F1F1F1)
-                        continue; /* empty track */
                 } else {
-                    if (read_32bitBE(entry_offset + 0x0c, sf) != 0x00)
+                    if (read_u32(entry_offset + 0x0c, sf) != 0x00)
                         goto fail;
                 }
                 break;
             }
         }
-
-        eof_offset = read_32bit(0x38, sf);
-        total_streams = (eof_offset - samples_table) / 0x08;
-        off_mult = 0x80;
     } else {
         goto fail;
     }
@@ -967,22 +977,83 @@ VGMSTREAM * init_vgmstream_ea_mpf_mus(STREAMFILE* sf) {
     if (!sf_mus)
         goto fail;
 
-    if (version == 5) {
-        if (read_32bitBE(0x00, sf_mus) != track_hash)
-            goto fail;
-    } else {
-        is_bnk = (read_32bitBE(0x00, sf_mus) == (big_endian ? EA_BNK_HEADER_BE : EA_BNK_HEADER_LE));
+    if (version < 5) {
+        is_bnk = (read_u32be(0x00, sf_mus) == (big_endian ? EA_BNK_HEADER_BE : EA_BNK_HEADER_LE));
     }
 
     /* 0x00 - offset/BNK index, 0x04 - duration (in milliseconds) */
+    sound_offset = read_u32(samples_table + (target_stream - 1) * 0x08 + 0x00, sf);
+
     if (is_bnk) {
-        /* TODO: Harry Potter COS appears to reference only the first segments of multi-segment BNK sounds? */
-        sound_offset = read_32bit(samples_table + (target_stream - 1) * 0x08 + 0x00, sf);
-        vgmstream = parse_bnk_header(sf_mus, version < 5 ? 0x00 : 0x100, sound_offset, 1);
+        /* for some reason, RAM segments are almost always split into multiple sounds (usually 4) */
+        off_t bnk_offset = version < 5 ? 0x00 : 0x100;
+        uint32_t bnk_sound_index = (sound_offset & 0x0000FFFF);
+        uint32_t bnk_index = (sound_offset & 0xFFFF0000) >> 16;
+        uint32_t next_entry;
+        uint32_t bnk_total_sounds = read_u16(bnk_offset + 0x06, sf_mus);
+        int bnk_segments;
+        STREAMFILE *sf_bnk = sf_mus;
+
+        if (version == 5 && bnk_index != 0) {
+            /* HACK: open proper .mus now since open_mapfile_pair doesn't let us adjust the name */
+            char filename[PATH_LIMIT], basename[PATH_LIMIT], ext[32];
+            int basename_len;
+
+            get_streamfile_basename(sf_mus, basename, PATH_LIMIT);
+            basename_len = strlen(basename);
+            get_streamfile_ext(sf_mus, ext, sizeof(ext));
+
+            /* strip off 0 at the end */
+            basename[basename_len - 1] = '\0';
+
+            /* append bank index to the name */
+            snprintf(filename, PATH_LIMIT, "%s%d.%s", basename, bnk_index, ext);
+
+            sf_bnk = open_streamfile_by_filename(sf_mus, filename);
+            if (!sf_bnk) goto fail;
+            bnk_total_sounds = read_u16(bnk_offset + 0x06, sf_bnk);
+            close_streamfile(sf_mus);
+            sf_mus = sf_bnk;
+        }
+
+        if (version == 5) {
+            track_hash = read_u32be(entry_offset + 0x14 + 0x10 * bnk_index, sf);
+            if (read_u32be(0x00, sf_mus) != track_hash)
+                goto fail;
+        }
+
+        /* play until the next entry in MPF track or the end of BNK */
+        if (target_stream < track_end) {
+            next_entry = read_u32(samples_table + (target_stream - 0) * 0x08 + 0x00, sf);
+            if (((next_entry & 0xFFFF0000) >> 16) == bnk_index) {
+                bnk_segments = (next_entry & 0x0000FFFF) - bnk_sound_index;
+            } else {
+                bnk_segments = bnk_total_sounds - bnk_sound_index;
+            }
+        } else {
+            bnk_segments = bnk_total_sounds - bnk_sound_index;
+        }
+
+        /* init layout */
+        data_s = init_layout_segmented(bnk_segments);
+        if (!data_s) goto fail;
+
+        for (i = 0; i < bnk_segments; i++) {
+            data_s->segments[i] = parse_bnk_header(sf_mus, bnk_offset, bnk_sound_index + i, 1);
+            if (!data_s->segments[i]) goto fail;
+        }
+
+        /* setup segmented VGMSTREAMs */
+        if (!setup_layout_segmented(data_s)) goto fail;
+
+        vgmstream = allocate_segmented_vgmstream(data_s, 0, 0, 0);
         if (!vgmstream)
             goto fail;
     } else {
-        sound_offset = read_32bit(samples_table + (target_stream - 1) * 0x08 + 0x00, sf) * off_mult;
+        if (version == 5 && read_u32be(0x00, sf_mus) != track_hash)
+            goto fail;
+
+        sound_offset *= off_mult;;
         if (read_32bitBE(sound_offset, sf_mus) != EA_BLOCKID_HEADER)
             goto fail;
 
@@ -998,6 +1069,8 @@ VGMSTREAM * init_vgmstream_ea_mpf_mus(STREAMFILE* sf) {
 
 fail:
     close_streamfile(sf_mus);
+    free_layout_segmented(data_s);
+
     return NULL;
 }
 
@@ -1375,9 +1448,7 @@ static VGMSTREAM * init_vgmstream_ea_variable_header(STREAMFILE* sf, ea_header* 
             for (i = 0; i < ea->channels; i++) {
                 vgmstream->ch[i].offset = ea->offsets[0] + interleave*i;
             }
-        } else if ((vgmstream->coding_type == coding_PCM8 || vgmstream->coding_type == coding_PCM16LE) &&
-            ea->platform == EA_PLATFORM_PS2 &&
-            (ea->flag_value & 0x100)) {
+        } else if (ea->platform == EA_PLATFORM_PS2 && (ea->flag_value & 0x100)) {
             /* weird 0x10 mini header when played on IOP (codec/loop start/loop end/samples) [SSX 3 (PS2)] */
             for (i = 0; i < vgmstream->channels; i++) {
                 vgmstream->ch[i].offset = ea->offsets[i] + 0x10;
@@ -1652,9 +1723,10 @@ static int parse_variable_header(STREAMFILE* sf, ea_header* ea, off_t begin_offs
     if (ea->platform == EA_PLATFORM_N64
         || ea->platform == EA_PLATFORM_MAC
         || ea->platform == EA_PLATFORM_SAT
-        || ea->platform == EA_PLATFORM_GC_WII
+        || ea->platform == EA_PLATFORM_GC
         || ea->platform == EA_PLATFORM_X360
         || ea->platform == EA_PLATFORM_PS3
+        || ea->platform == EA_PLATFORM_WII
         || ea->platform == EA_PLATFORM_GENERIC) {
         ea->big_endian = 1;
     }
@@ -1673,11 +1745,12 @@ static int parse_variable_header(STREAMFILE* sf, ea_header* ea, off_t begin_offs
             case EA_PLATFORM_MAC:       ea->version = EA_VERSION_V0; break;
             case EA_PLATFORM_SAT:       ea->version = EA_VERSION_V0; break;
             case EA_PLATFORM_PS2:       ea->version = EA_VERSION_V1; break;
-            case EA_PLATFORM_GC_WII:    ea->version = EA_VERSION_V2; break;
+            case EA_PLATFORM_GC:        ea->version = EA_VERSION_V2; break;
             case EA_PLATFORM_XBOX:      ea->version = EA_VERSION_V2; break;
             case EA_PLATFORM_X360:      ea->version = EA_VERSION_V3; break;
             case EA_PLATFORM_PSP:       ea->version = EA_VERSION_V3; break;
             case EA_PLATFORM_PS3:       ea->version = EA_VERSION_V3; break;
+            case EA_PLATFORM_WII:       ea->version = EA_VERSION_V3; break;
             case EA_PLATFORM_3DS:       ea->version = EA_VERSION_V3; break;
             case EA_PLATFORM_GENERIC:   ea->version = EA_VERSION_V2; break;
             default:
@@ -1732,11 +1805,12 @@ static int parse_variable_header(STREAMFILE* sf, ea_header* ea, off_t begin_offs
             case EA_PLATFORM_PSX:       ea->codec2 = EA_CODEC2_VAG; break;
             case EA_PLATFORM_MAC:       ea->codec2 = EA_CODEC2_EAXA; break;
             case EA_PLATFORM_PS2:       ea->codec2 = EA_CODEC2_VAG; break;
-            case EA_PLATFORM_GC_WII:    ea->codec2 = EA_CODEC2_S16BE; break;
+            case EA_PLATFORM_GC:        ea->codec2 = EA_CODEC2_S16BE; break;
             case EA_PLATFORM_XBOX:      ea->codec2 = EA_CODEC2_S16LE; break;
             case EA_PLATFORM_X360:      ea->codec2 = EA_CODEC2_EAXA; break;
             case EA_PLATFORM_PSP:       ea->codec2 = EA_CODEC2_EAXA; break;
             case EA_PLATFORM_PS3:       ea->codec2 = EA_CODEC2_EAXA; break;
+            //case EA_PLATFORM_WII:       ea->codec2 = EA_CODEC2_EAXA; break; /* not set? */
             case EA_PLATFORM_3DS:       ea->codec2 = EA_CODEC2_GCADPCM; break;
             default:
                 VGM_LOG("EA SCHl: unknown default codec2 for platform 0x%02x\n", ea->platform);
@@ -1754,11 +1828,12 @@ static int parse_variable_header(STREAMFILE* sf, ea_header* ea, off_t begin_offs
             case EA_PLATFORM_MAC:       ea->sample_rate = 22050; break;
             case EA_PLATFORM_SAT:       ea->sample_rate = 22050; break;
             case EA_PLATFORM_PS2:       ea->sample_rate = 22050; break;
-            case EA_PLATFORM_GC_WII:    ea->sample_rate = 24000; break;
+            case EA_PLATFORM_GC:        ea->sample_rate = 24000; break;
             case EA_PLATFORM_XBOX:      ea->sample_rate = 24000; break;
             case EA_PLATFORM_X360:      ea->sample_rate = 44100; break;
             case EA_PLATFORM_PSP:       ea->sample_rate = 22050; break;
             case EA_PLATFORM_PS3:       ea->sample_rate = 44100; break;
+            case EA_PLATFORM_WII:       ea->sample_rate = 32000; break;
             case EA_PLATFORM_3DS:       ea->sample_rate = 32000; break;
             default:
                 VGM_LOG("EA SCHl: unknown default sample rate for platform 0x%02x\n", ea->platform);
