@@ -200,7 +200,7 @@ VGMSTREAM* (*init_vgmstream_functions[])(STREAMFILE* sf) = {
     init_vgmstream_redspark,
     init_vgmstream_ivaud,
     init_vgmstream_wii_wsd,
-    init_vgmstream_wii_ndp,
+    init_vgmstream_dsp_ndp,
     init_vgmstream_ps2_sps,
     init_vgmstream_ps2_xa2_rrp,
     init_vgmstream_nds_hwas,
@@ -512,6 +512,10 @@ VGMSTREAM* (*init_vgmstream_functions[])(STREAMFILE* sf) = {
     init_vgmstream_xws,
     init_vgmstream_cpk,
     init_vgmstream_opus_nsopus,
+    init_vgmstream_sbk,
+    init_vgmstream_dsp_wiiadpcm,
+    init_vgmstream_dsp_cwac,
+    init_vgmstream_ifs,
 
     /* lowest priority metas (should go after all metas, and TXTH should go before raw formats) */
     init_vgmstream_txth,            /* proper parsers should supersede TXTH, once added */
@@ -877,12 +881,20 @@ void vgmstream_set_loop_target(VGMSTREAM* vgmstream, int loop_target) {
 /* MISC                                                                        */
 /*******************************************************************************/
 
+static void describe_get_time(int32_t samples, int sample_rate, double* p_time_mm, double* p_time_ss) {
+    double seconds = (double)samples / sample_rate;
+    *p_time_mm = (int)(seconds / 60.0);
+    *p_time_ss = seconds - *p_time_mm * 60.0f;
+    if (*p_time_ss >= 59.999) /* avoid round up to 60.0 when printing to %06.3f */
+        *p_time_ss = 59.999;
+}
+
 /* Write a description of the stream into array pointed by desc, which must be length bytes long.
  * Will always be null-terminated if length > 0 */
 void describe_vgmstream(VGMSTREAM* vgmstream, char* desc, int length) {
 #define TEMPSIZE (256+32)
     char temp[TEMPSIZE];
-    double time_mm, time_ss, seconds;
+    double time_mm, time_ss;
 
     if (!vgmstream) {
         snprintf(temp,TEMPSIZE, "NULL VGMSTREAM");
@@ -935,27 +947,22 @@ void describe_vgmstream(VGMSTREAM* vgmstream, char* desc, int length) {
         concatn(length,desc,"\n");
     }
 
+    /* times mod sounds avoid round up to 60.0 */
     if (vgmstream->loop_start_sample >= 0 && vgmstream->loop_end_sample > vgmstream->loop_start_sample) {
         if (!vgmstream->loop_flag) {
             concatn(length,desc,"looping: disabled\n");
         }
 
-        seconds = (double)vgmstream->loop_start_sample / vgmstream->sample_rate;
-        time_mm = (int)(seconds / 60.0);
-        time_ss = seconds - time_mm * 60.0f;
+        describe_get_time(vgmstream->loop_start_sample, vgmstream->sample_rate, &time_mm, &time_ss);
         snprintf(temp,TEMPSIZE, "loop start: %d samples (%1.0f:%06.3f seconds)\n", vgmstream->loop_start_sample, time_mm, time_ss);
         concatn(length,desc,temp);
 
-        seconds = (double)vgmstream->loop_end_sample / vgmstream->sample_rate;
-        time_mm = (int)(seconds / 60.0);
-        time_ss = seconds - time_mm * 60.0f;
+        describe_get_time(vgmstream->loop_end_sample, vgmstream->sample_rate, &time_mm, &time_ss);
         snprintf(temp,TEMPSIZE, "loop end: %d samples (%1.0f:%06.3f seconds)\n", vgmstream->loop_end_sample, time_mm, time_ss);
         concatn(length,desc,temp);
     }
 
-    seconds = (double)vgmstream->num_samples / vgmstream->sample_rate;
-    time_mm = (int)(seconds / 60.0);
-    time_ss = seconds - time_mm * 60.0;
+    describe_get_time(vgmstream->num_samples, vgmstream->sample_rate, &time_mm, &time_ss);
     snprintf(temp,TEMPSIZE, "stream total samples: %d (%1.0f:%06.3f seconds)\n", vgmstream->num_samples, time_mm, time_ss);
     concatn(length,desc,temp);
 
@@ -1012,7 +1019,7 @@ void describe_vgmstream(VGMSTREAM* vgmstream, char* desc, int length) {
     concatn(length,desc,temp);
     concatn(length,desc,"\n");
 
-    snprintf(temp,TEMPSIZE, "bitrate: %d kbps\n", get_vgmstream_average_bitrate(vgmstream) / 1000); //todo \n?
+    snprintf(temp,TEMPSIZE, "bitrate: %d kbps\n", get_vgmstream_average_bitrate(vgmstream) / 1000);
     concatn(length,desc,temp);
 
     /* only interesting if more than one */
@@ -1032,13 +1039,9 @@ void describe_vgmstream(VGMSTREAM* vgmstream, char* desc, int length) {
     }
 
     if (vgmstream->config_enabled) {
-        double time_mm, time_ss, seconds;
         int32_t samples = vgmstream->pstate.play_duration;
 
-        seconds = (double)samples / vgmstream->sample_rate;
-        time_mm = (int)(seconds / 60.0);
-        time_ss = seconds - time_mm * 60.0f;
-
+        describe_get_time(samples, vgmstream->sample_rate, &time_mm, &time_ss);
         snprintf(temp,TEMPSIZE, "play duration: %d samples (%1.0f:%06.3f seconds)\n", samples, time_mm, time_ss);
         concatn(length,desc,temp);
     }

@@ -25,7 +25,8 @@ static const char* extension_list[] = {
     "208",
     "2dx9",
     "2pfs",
-    "4", // for Game.com audio
+    "3do",
+    "4", //for Game.com audio
     "8", //txth/reserved [Gungage (PS1)]
     "800",
     "9tav",
@@ -102,7 +103,7 @@ static const char* extension_list[] = {
     "bgw",
     "bh2pcm",
     "bik",
-    "bika",
+    "bika", //fake extension for .bik (to be removed)
     "bik2",
     //"bin", //common
     "bk2",
@@ -220,6 +221,7 @@ static const char* extension_list[] = {
     "idwav",
     "idx",
     "idxma",
+    "ifs",
     "ikm",
     "ild",
     "ilv", //txth/reserved [Star Wars Episode III (PS2)]
@@ -340,7 +342,8 @@ static const char* extension_list[] = {
 
     "n64",
     "naac",
-    "ndp",
+    "nds",
+    "ndp", //fake extension/header id for .nds
     "ngca",
     "nlsd",
     "nop",
@@ -424,6 +427,7 @@ static const char* extension_list[] = {
     "sb5",
     "sb6",
     "sb7",
+    "sbk",
     "sbr",
     "sbv",
     "sm0",
@@ -748,6 +752,7 @@ static const coding_info coding_info_list[] = {
         {coding_REF_IMA,            "Reflections 4-bit IMA ADPCM"},
         {coding_AWC_IMA,            "Rockstar AWC 4-bit IMA ADPCM"},
         {coding_UBI_IMA,            "Ubisoft 4-bit IMA ADPCM"},
+        {coding_UBI_SCE_IMA,        "Ubisoft 4-bit SCE IMA ADPCM"},
         {coding_H4M_IMA,            "Hudson HVQM4 4-bit IMA ADPCM"},
         {coding_CD_IMA,             "Crystal Dynamics 4-bit IMA ADPCM"},
 
@@ -943,7 +948,7 @@ static const meta_info meta_info_list[] = {
         {meta_DSP_WSI,              "Alone in the Dark .WSI header"},
         {meta_AIFC,                 "Apple AIFF-C (Audio Interchange File Format) header"},
         {meta_AIFF,                 "Apple AIFF (Audio Interchange File Format) header"},
-        {meta_STR_SNDS,             "3DO .str header"},
+        {meta_STR_SNDS,             "3DO SNDS header"},
         {meta_WS_AUD,               "Westwood Studios .aud header"},
         {meta_WS_AUD_old,           "Westwood Studios .aud (old) header"},
         {meta_PS2_IVB,              "IVB/BVII header"},
@@ -1317,6 +1322,9 @@ static const meta_info meta_info_list[] = {
         {meta_WADY,                 "Marble WADY header"},
         {meta_DSP_SQEX,             "Square Enix DSP header"},
         {meta_DSP_WIIVOICE,         "Koei Tecmo WiiVoice header"},
+        {meta_SBK,                  "Team17 SBK header"},
+        {meta_DSP_WIIADPCM,         "Exient WIIADPCM header"},
+        {meta_DSP_CWAC,             "CRI CWAC header"},
 };
 
 void get_vgmstream_coding_description(VGMSTREAM* vgmstream, char* out, size_t out_size) {

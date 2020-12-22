@@ -54,10 +54,10 @@
 #endif
 
 #ifndef VERSIONW
-#define VERSIONW L"2.3380"
+#define VERSIONW L"2.3533"
 #endif
 
-#define LIBVGMSTREAM_BUILD "1050-3380-gc339b062-wacup"
+#define LIBVGMSTREAM_BUILD "1050-3533-g95709ce3-wacup"
 #define APP_NAME "vgmstream plugin"
 #define PLUGIN_DESCRIPTION "vgmstream Decoder v" VERSION
 #define PLUGIN_DESCRIPTIONW L"vgmstream Decoder v" VERSIONW
@@ -607,8 +607,8 @@ static int split_subsongs(const in_char * filename, int stream_index, VGMSTREAM 
     if (stream_index > 0 || vgmstream->stream_index > 0)
         return 0; /* no split if already playing subsong */
 
-    hPlaylistWindow = (HWND)SendMessage(plugin.hMainWindow, WM_WA_IPC, IPC_GETWND_PE, IPC_GETWND);
-    playlist_index = SendMessage(plugin.hMainWindow, WM_WA_IPC, 0, IPC_GETLISTPOS);
+    hPlaylistWindow = GetPlaylistWnd()/*(HWND)SendMessage(plugin.hMainWindow, WM_WA_IPC, IPC_GETWND_PE, IPC_GETWND)*/;
+    playlist_index = GetPlaylistPosition()/*SendMessage(plugin.hMainWindow, WM_WA_IPC, 0, IPC_GETLISTPOS)*/;
 
     /* The only way to pass info around in Winamp is encoding it into the filename, so a fake name
      * is created with the index. Then, winamp_Play (and related) intercepts and reads the index. */

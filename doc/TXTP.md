@@ -165,7 +165,7 @@ mode = layers
 - `type`: group as `S`=segments, `L`=layers, or `R`=pseudo-random
 - `count`: number of files in group (optional, default is all)
 - `repeat`: R=repeat group of `count` files until end (optional, default is no repeat)
-- `>file`: select file in pseudo-random groups (ignored for others)
+- `>file`: select file (for pseudo-random groups)
 
 Examples:
 - `L`: take all files as layers (equivalent to `mode = layers`)
@@ -193,7 +193,7 @@ group = -S2  #segment prev 2 (will start from pos.1 = bgm1+2, makes group of bgm
 ```
 
 ### Pseudo-random groups
-Group `R` is meant to help with games that randomly select a file in a group. You can set with `>N` which file will be selected. This way you can quickly edit the TXTP and change the file (you could just comment files too, this is just for convenience in complex cases and testing). You can also set `>-`, meaning "play all", basically turning `R` into `S`. Files do need to exist and are parsed before being selected, and it can select groups too.
+Group `R` is meant to help with games that randomly select a file in a group. You can set with `>N` which file will be selected. This way you can quickly edit the TXTP and change the file (you could just comment files too, this is just for convenience in complex cases and testing). You can also set `>-`, meaning "play all", basically turning `R` into `S` (this can be ommited, but it's clearer). Files do need to exist and are parsed before being selected, and it can select groups too.
 ```
  bgm1.adx
  bgm2.adx
@@ -332,6 +332,7 @@ music_Home.ps3.scd#C1~3
 - **`#b(time)`**: set target time (even without loops) for the body part (modified by other values)
 - **`#f(fade period)`**: set (in seconds) how long the fade out lasts after target number of loops (if file loops)
 - **`#d(fade delay)`**: set (in seconds) delay before fade out kicks in (if file loops)
+- **`#B(time)`**: same as `#b`, but implies no `#f`/`#d` (for easier exact times).
 - **`#p(time-begin)`**: pad song beginning (not between loops)
 - **`#P(time-end)`**: pad song song end (not between loops)
 - **`#r(time-begin)`**: remove/trim song beginning (not between loops)
@@ -505,9 +506,25 @@ bgm03.adx
 bgm04.adx #A  ##defines loop end
 bgm05.adx
 ```
-You can also use `#@loop` to set loop start.
+You can also use `#@loop` and `#@loop-end` aliases.
 
-This setting also works in groups, which allows loops when using multiple segmented groups (not possible with `loop_start/end_segment`).
+Anchors can be applied to groups too.
+```
+  bgm01a.adx
+  bgm01b.adx
+ group -L2
+  bgm02a.adx
+  bgm02b.adx
+ group -L2 #a   ##loops here
+group -S2
+```
+```
+  bgm01.adx
+  bgm02.adx
+group = -L2 #a  ##similar to loop_start_segment=1 or #E
+```
+
+This setting also works inside groups, which allows internal loops when using multiple segmented layouts (not possible with `loop_start/end_segment`).
 ```
   bgm01.adx
   bgm02.adx #a
@@ -517,10 +534,9 @@ This setting also works in groups, which allows loops when using multiple segmen
   bgm03.adx
  group -S2 #l 3.0
 group -S2
-#could use R groups to select one sub-groups that loops
+# could even use R group to select one sub-groups that loops
 # (loop_start_segment doesn't make sense for both segments)
 ```
-Loop anchors have priority over `loop_start_segment`, and are ignored in layered layouts.
 
 
 ### Force sample rate

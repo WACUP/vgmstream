@@ -9,7 +9,7 @@
  * Some info: https://www.audiokinetic.com/en/library/edge/
  * .bnk (dynamic music/loop) info: https://github.com/bnnm/wwiser
  */
-typedef enum { PCM, IMA, VORBIS, DSP, XMA2, XWMA, AAC, HEVAG, ATRAC9, OPUSNX, OPUS, OPUSWW, PTADPCM } wwise_codec;
+typedef enum { PCM, IMA, VORBIS, DSP, XMA2, XWMA, AAC, HEVAG, ATRAC9, OPUSNX, OPUS, OPUSCPR, OPUSWW, PTADPCM } wwise_codec;
 typedef struct {
     int big_endian;
     size_t file_size;
@@ -30,7 +30,8 @@ typedef struct {
     size_t smpl_size;
     off_t  seek_offset;
     size_t seek_size;
-
+    off_t  meta_offset;
+    size_t meta_size;
 
     /* standard fmt stuff */
     wwise_codec codec;
@@ -66,7 +67,7 @@ VGMSTREAM* init_vgmstream_wwise(STREAMFILE* sf) {
 
     /* checks */
     /* .wem: newer "Wwise Encoded Media" used after the 2011.2 SDK (~july 2011)
-     * .wav: older ADPCM files [Punch Out!! (Wii)]
+     * .wav: older PCM/ADPCM files [Spider-Man: Web of Shadows (PC), Punch Out!! (Wii)]
      * .xma: older XMA files [Too Human (X360), Tron Evolution (X360)]
      * .ogg: older Vorbis files [The King of Fighters XII (X360)]
      * .bnk: Wwise banks for memory .wem detection */
@@ -254,6 +255,12 @@ VGMSTREAM* init_vgmstream_wwise(STREAMFILE* sf) {
                 cfg.blocksize_1_exp = read_u8(extra_offset + block_offsets + 0x00, sf); /* small */
                 cfg.blocksize_0_exp = read_u8(extra_offset + block_offsets + 0x01, sf); /* big */
                 ww.data_size -= audio_offset;
+
+                /* mutant .wem with metadata (voice strings/etc) between seek table and vorbis setup [Gears of War 4 (PC)] */
+                if (ww.meta_offset) {
+                    /* 0x00: original setup_offset */
+                    setup_offset += read_u32(ww.meta_offset + 0x04, sf); /* metadata size */
+                }
 
                 /* detect normal packets */
                 if (ww.extra_size == 0x30) {
@@ -485,12 +492,29 @@ VGMSTREAM* init_vgmstream_wwise(STREAMFILE* sf) {
             break;
         }
 
+        case OPUSCPR: { /* CD Project RED's Ogg Opus masquerading as PCMEX [Cyberpunk 2077 (PC)] */
+            if (ww.bits_per_sample != 16) goto fail;
+
+            /* original data_size doesn't look related to samples or anything */
+			ww.data_size = ww.file_size - ww.data_offset;
+
+            vgmstream->codec_data = init_ffmpeg_offset(sf, ww.data_offset, ww.data_size);
+            if (!vgmstream->codec_data) goto fail;
+            vgmstream->coding_type = coding_FFmpeg;
+            vgmstream->layout_type = layout_none;
+
+            /* FFmpeg's samples seem correct, otherwise see ogg_opus.c for getting samples. */
+            vgmstream->num_samples = (int32_t)((ffmpeg_codec_data*)vgmstream->codec_data)->totalSamples;
+            break;
+        }
+
         case OPUSWW: { /* updated Opus [Assassin's Creed Valhalla (PC)] */
             int mapping;
             opus_config cfg = {0};
 
             if (ww.block_align != 0 || ww.bits_per_sample != 0) goto fail;
             if (!ww.seek_offset) goto fail;
+            if (ww.channels > 8) goto fail; /* mapping not defined */
 
             cfg.channels = ww.channels;
             cfg.table_offset = ww.seek_offset;
@@ -737,6 +761,10 @@ static int parse_wwise(STREAMFILE* sf, wwise_header* ww) {
                     ww->smpl_offset = offset;
                     ww->smpl_size = size;
                     break;
+                case 0x6D657461: /* "meta" */
+                    ww->meta_offset = offset;
+                    ww->meta_size = size;
+                    break;
 
                 case 0x66616374: /* "fact" */
                     /* Wwise shouldn't use fact, but if somehow some file does uncomment the following: */
@@ -816,7 +844,7 @@ static int parse_wwise(STREAMFILE* sf, wwise_header* ww) {
     /* format to codec */
     switch(ww->format) {
         case 0x0001: ww->codec = PCM; break; /* older Wwise */
-        case 0x0002: ww->codec = IMA; break; /* newer Wwise (conflicts with MSADPCM, probably means "platform's ADPCM") */
+        case 0x0002: ww->codec = IMA; break; /* newer Wwise (variable, probably means "platform's ADPCM") */
         case 0x0069: ww->codec = IMA; break; /* older Wwise [Spiderman Web of Shadows (X360), LotR Conquest (PC)] */
         case 0x0161: ww->codec = XWMA; break; /* WMAv2 */
         case 0x0162: ww->codec = XWMA; break; /* WMAPro */
@@ -872,6 +900,16 @@ static int parse_wwise(STREAMFILE* sf, wwise_header* ww) {
         }
     }
 
+
+    /* Cyberpunk 2077 has some mutant .wem, with proper Wwise header and PCMEX but data is standard OPUS.
+     * From init bank and CAkSound's sources, those may be piped through their plugins. They come in
+     * .opuspak (no names), have wrong riff/data sizes and only seem used for sfx (other audio is Vorbis). */
+    if (ww->format == 0xFFFE && ww->truncated) {
+        if (read_u32be(ww->data_offset + 0x00, sf) == 0x4F676753) {
+            ww->codec = OPUSCPR;
+        }
+    }
+
     return 1;
 fail:
     return 0;
@@ -882,61 +920,54 @@ fail:
 /*
 - old format
 "fmt" size 0x28, extra size 0x16 / size 0x18, extra size 0x06
-0x12 (2): flag? (00,10,18): not related to seek table, codebook type, chunk count, looping
-0x14 (4): channel config
 0x18-24 (16): ? (fixed: 0x01000000 00001000 800000AA 00389B71)  [removed when extra size is 0x06]
 
 "vorb" size 0x34
-0x00 (4): num_samples
+0x00 (4): dwTotalPCMFrames
 0x04 (4): skip samples?
-0x08 (4): ? (small if loop, 0 otherwise)
-0x0c (4): data start offset after seek table+setup, or loop start when "smpl" is present
-0x10 (4): ? (small, 0..~0x400)
-0x14 (4): approximate data size without seek table? (almost setup+packets)
-0x18 (4): setup_offset within data (0 = no seek table)
-0x1c (4): audio_offset within data
-0x20 (2): biggest packet size (not including header)?
-0x22 (2): ? (small, N..~0x100) uLastGranuleExtra?
-0x24 (4): ? (mid, 0~0x5000) dwDecodeAllocSize?
-0x28 (4): ? (mid, 0~0x5000) dwDecodeX64AllocSize?
-0x2c (4): parent bank/event id? uHashCodebook? (shared by several .wem a game, but not all need to share it)
-0x30 (1): blocksize_1_exp (small)
-0x31 (1): blocksize_0_exp (large)
+0x08 (4): LoopInfo.uLoopBeginExtra? (present if loop)
+0x0c (4): LoopInfo.dwLoopStartPacketOffset (data start, or loop start when "smpl" is present)
+0x10 (4): LoopInfo.uLoopEndExtra? (0..~0x400)
+0x14 (4): LoopInfo.dwLoopEndPacketOffset?
+0x18 (4): dwSeekTableSize (0 = no seek table)
+0x1c (4): dwVorbisDataOffset (offset within data)
+0x20 (2): uMaxPacketSize (not including header) 
+0x22 (2): uLastGranuleExtra (0..~0x100)
+0x24 (4): dwDecodeAllocSize (0~0x5000)
+0x28 (4): dwDecodeX64AllocSize (mid, 0~0x5000)
+0x2c (4): uHashCodebook? (shared by several .wem a game, but not all need to share it)
+0x30 (1): uBlockSizes[0] (blocksize_1_exp, small)
+0x31 (1): uBlockSizes[1] (blocksize_0_exp, large)
 0x32 (2): empty
 
 "vorb" size 0x28 / 0x2c / 0x2a
-0x00 (4): num_samples
-0x04 (4): data start offset after seek table+setup, or loop start when "smpl" is present
-0x08 (4): data end offset after seek table (setup+packets), or loop end when "smpl" is present
+0x00 (4): dwTotalPCMFrames
+0x04 (4): LoopInfo.dwLoopStartPacketOffset (data start, or loop start when "smpl" is present)
+0x08 (4): LoopInfo.dwLoopEndPacketOffset (data end, or loop end when "smpl" is present)
 0x0c (2): ? (small, 0..~0x400) [(4) when size is 0x2C]
-0x10 (4): setup_offset within data (0 = no seek table)
-0x14 (4): audio_offset within data
-0x18 (2): biggest packet size (not including header)?
-0x1a (2): ? (small, N..~0x100) uLastGranuleExtra? [(4) when size is 0x2C]
-0x1c (4): ? (mid, 0~0x5000) dwDecodeAllocSize?
-0x20 (4): ? (mid, 0~0x5000) dwDecodeX64AllocSize?
-0x24 (4): parent bank/event id? uHashCodebook? (shared by several .wem a game, but not all need to share it)
-0x28 (1): blocksize_1_exp (small) [removed when size is 0x28]
-0x29 (1): blocksize_0_exp (large) [removed when size is 0x28]
+0x10 (4): dwSeekTableSize (0 = no seek table)
+0x14 (4): dwVorbisDataOffset (offset within data)
+0x18 (2): uMaxPacketSize (not including header) 
+0x1a (2): uLastGranuleExtra (0..~0x100) [(4) when size is 0x2C]
+0x1c (4): dwDecodeAllocSize (0~0x5000)
+0x20 (4): dwDecodeX64AllocSize (0~0x5000)
+0x24 (4): uHashCodebook? (shared by several .wem a game, but not all need to share it)
+0x28 (1): uBlockSizes[0] (blocksize_1_exp, small) [removed when size is 0x28]
+0x29 (1): uBlockSizes[1] (blocksize_0_exp, large) [removed when size is 0x28]
 
 - new format:
 "fmt" size 0x42, extra size 0x30
-0x12 (2): flag? (00,10,18): not related to seek table, codebook type, chunk count, looping, etc
-0x14 (4): channel config
-0x18 (4): num_samples
-0x1c (4): data start offset after seek table+setup, or loop start when "smpl" is present
-0x20 (4): data end offset after seek table (setup+packets), or loop end when "smpl" is present
-0x24 (2): ?1 (small, 0..~0x400)
-0x26 (2): ?2 (small, N..~0x100): not related to seek table, codebook type, chunk count, looping, packet size, samples, etc
-0x28 (4): setup offset within data (0 = no seek table)
-0x2c (4): audio offset within data
-0x30 (2): biggest packet size (not including header)
-0x32 (2): (small, 0..~0x100) uLastGranuleExtra?
-0x34 (4): ? (mid, 0~0x5000) dwDecodeAllocSize?
-0x38 (4): ? (mid, 0~0x5000) dwDecodeX64AllocSize?
-0x40 (1): blocksize_1_exp (small)
-0x41 (1): blocksize_0_exp (large)
-
-Wwise encoder options, unknown fields above may be reflect these:
- https://www.audiokinetic.com/library/edge/?source=Help&id=vorbis_encoder_parameters
+0x18 (4): dwTotalPCMFrames
+0x1c (4): LoopInfo.dwLoopStartPacketOffset (data start, or loop start when "smpl" is present)
+0x20 (4): LoopInfo.dwLoopEndPacketOffset (data end, or loop end when "smpl" is present)
+0x24 (2): LoopInfo.uLoopBeginExtra (small, 0..~0x400)
+0x26 (2): LoopInfo.uLoopEndExtra (extra samples after seek?)
+0x28 (4): dwSeekTableSize (0 = no seek table)
+0x2c (4): dwVorbisDataOffset (offset within data)
+0x30 (2): uMaxPacketSize (not including header) 
+0x32 (2): uLastGranuleExtra (small, 0..~0x100)
+0x34 (4): dwDecodeAllocSize (mid, 0~0x5000)
+0x38 (4): dwDecodeX64AllocSize (mid, 0~0x5000)
+0x40 (1): uBlockSizes[0] (blocksize_1_exp, small)
+0x41 (1): uBlockSizes[1] (blocksize_0_exp, large)
 */

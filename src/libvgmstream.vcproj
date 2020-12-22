@@ -401,6 +401,10 @@
                     >
                 </File>
                 <File
+                    RelativePath=".\meta\ubi_sb_garbage_streamfile.h"
+                    >
+                </File>
+                <File
                     RelativePath=".\meta\ubi_lyn_streamfile.h"
                     >
                 </File>
@@ -1278,10 +1282,14 @@
 					RelativePath=".\meta\ps2_iab.c"
 					>
 				</File>
-				<File
-					RelativePath=".\meta\ikm.c"
-					>
-				</File>
+                <File
+                    RelativePath=".\meta\ifs.c"
+                    >
+                </File>
+                <File
+                    RelativePath=".\meta\ikm.c"
+                    >
+                </File>
 				<File
 					RelativePath=".\meta\ps2_ild.c"
 					>
@@ -2308,6 +2316,10 @@
                 </File>
                 <File
                     RelativePath=".\coding\vorbis_custom_decoder.c"
+                    >
+                </File>
+                <File
+                    RelativePath=".\coding\vorbis_custom_utils_awc.c"
                     >
                 </File>
                 <File

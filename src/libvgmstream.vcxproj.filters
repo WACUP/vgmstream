@@ -191,6 +191,9 @@
     <ClInclude Include="meta\ubi_sb_streamfile.h">
       <Filter>meta\Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="meta\ubi_sb_garbage_streamfile.h">
+      <Filter>meta\Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="meta\ubi_lyn_streamfile.h">
       <Filter>meta\Header Files</Filter>
     </ClInclude>
@@ -823,6 +826,9 @@
     <ClCompile Include="meta\ps2_hgc1.c">
       <Filter>meta\Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="meta\ifs.c">
+      <Filter>meta\Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="meta\ikm.c">
       <Filter>meta\Source Files</Filter>
     </ClCompile>
@@ -1378,6 +1384,9 @@
     <ClCompile Include="coding\vorbis_custom_decoder.c">
       <Filter>coding\Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="coding\vorbis_custom_utils_awc.c">
+      <Filter>coding\Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="coding\vorbis_custom_utils_fsb.c">
       <Filter>coding\Source Files</Filter>
     </ClCompile>
@@ -1832,6 +1841,9 @@
       <Filter>meta\Source Files</Filter>
     </ClCompile>
     <ClCompile Include="meta\kat.c">
+      <Filter>meta\Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="meta\sbk.c">
       <Filter>meta\Source Files</Filter>
     </ClCompile>
   </ItemGroup>
