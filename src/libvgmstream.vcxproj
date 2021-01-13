@@ -158,6 +158,7 @@
     <ClInclude Include="coding\circus_decoder_lzxpcm.h" />
     <ClInclude Include="coding\circus_decoder_miniz.h" />
     <ClInclude Include="coding\coding.h" />
+    <ClInclude Include="coding\coding_utils_samples.h" />
     <ClInclude Include="coding\ea_mt_decoder_utk.h" />
     <ClInclude Include="coding\g7221_decoder_aes.h" />
     <ClInclude Include="coding\g7221_decoder_lib.h" />
@@ -286,6 +287,7 @@
     <ClCompile Include="meta\aax.c" />
     <ClCompile Include="meta\acb.c" />
     <ClCompile Include="meta\acm.c" />
+    <ClCompile Include="meta\acx.c" />
     <ClCompile Include="meta\adp_konami.c" />
     <ClCompile Include="meta\adpcm_capcom.c" />
     <ClCompile Include="meta\ads.c" />
@@ -634,6 +636,7 @@
     <ClCompile Include="coding\relic_decoder_mixfft.c" />
     <ClCompile Include="coding\sassc_decoder.c" />
     <ClCompile Include="coding\sdx2_decoder.c" />
+    <ClCompile Include="coding\speex_decoder.c" />
     <ClCompile Include="coding\ubi_adpcm_decoder.c" />
     <ClCompile Include="coding\vadpcm_decoder.c" />
     <ClCompile Include="coding\vorbis_custom_decoder.c" />
