@@ -54,10 +54,10 @@
 #endif
 
 #ifndef VERSIONW
-#define VERSIONW L"2.3533"
+#define VERSIONW L"2.3556"
 #endif
 
-#define LIBVGMSTREAM_BUILD "1050-3533-g95709ce3-wacup"
+#define LIBVGMSTREAM_BUILD "1050-3556-g205443e1-wacup"
 #define APP_NAME "vgmstream plugin"
 #define PLUGIN_DESCRIPTION "vgmstream Decoder v" VERSION
 #define PLUGIN_DESCRIPTIONW L"vgmstream Decoder v" VERSIONW
@@ -849,7 +849,7 @@ void about(HWND hwndParent)
 {
     // TODO need to ensure that we keep the build # correct
     AboutMessageBox(hwndParent, PLUGIN_DESCRIPTIONW L"\n\n"
-                    L"Copyright © 2008-2020 hcs, FastElbja, manakoAT, bxaimc,\n"
+                    L"Copyright © 2008-2021 hcs, FastElbja, manakoAT, bxaimc,\n"
                     L"snakemeat, soneek, kode54, bnnm and all other contributors.\n\n"
                     L"WACUP integration updates by Darren Owen aka DrO\n\n"
                     L"Build date: " TEXT(__DATE__) L"\n\n"
@@ -1354,7 +1354,8 @@ In_Module plugin = {
     NULL, /* SetInfo */
     0, /* outMod */
     0, /* api_service */
-    GetFileExtensions /* loading optimisation :) */
+    GetFileExtensions, /* loading optimisation :) */
+	IN_INIT_WACUP_END_STRUCT
 };
 
 extern "C" __declspec(dllexport) In_Module * winampGetInModule2(void) {
@@ -1562,7 +1563,8 @@ extern "C" __declspec(dllexport) int winampGetExtendedFileInfoW(wchar_t *filenam
 {
 	int retval = 0;
 
-	if (!_stricmp(metadata, "type"))
+	if (!_stricmp(metadata, "type") ||
+		!_stricmp(metadata, "streammetadata"))
 	{
 		ret[0] = '0';
 		ret[1] = 0;
