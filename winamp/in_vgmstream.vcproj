@@ -201,11 +201,15 @@
 			UniqueIdentifier="{4FC737F1-C7A5-4376-A066-2A32D752A2FF}"
 			>
 			<File
-				RelativePath=".\in_vgmstream.c"
+				RelativePath=".\in_config.c"
 				>
 			</File>
 			<File
-				RelativePath="..\src\plugins.c"
+				RelativePath=".\in_streamfile.c"
+				>
+			</File>
+			<File
+				RelativePath=".\in_vgmstream.c"
 				>
 			</File>
 		</Filter>

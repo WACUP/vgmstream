@@ -18,6 +18,9 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="in_vgmstream.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="resource.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -28,10 +31,13 @@
     </ResourceCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="in_vgmstream.c">
+    <ClCompile Include="in_config.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\src\plugins.c">
+    <ClCompile Include="in_streamfile.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="in_vgmstream.c">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
