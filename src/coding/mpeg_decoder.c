@@ -204,9 +204,6 @@ static mpg123_handle* init_mpg123_handle() {
 #endif
 
     if (rc == MPG123_NOT_INITIALIZED) {
-        /* inits the library if needed */
-        if (mpg123_init() != MPG123_OK)
-            goto fail;
         m = mpg123_new(NULL,&rc);
         if (rc != MPG123_OK) goto fail;
     } else if (rc != MPG123_OK) {
