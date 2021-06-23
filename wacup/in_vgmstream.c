@@ -1218,15 +1218,14 @@ static void do_seek(VGMSTREAM* vgmstream) {
 
 /* the decode thread */
 DWORD WINAPI __stdcall decode(void *arg) {
-    const int max_buffer_samples = sizeof(sample_buffer) / sizeof(sample_buffer[0]) / 2 / vgmstream->channels;
-    const int max_samples = get_vgmstream_play_samples(loop_count, fade_seconds, fade_delay_seconds, vgmstream);
+    const int max_buffer_samples = SAMPLE_BUFFER_SIZE;
+    const int play_forever = vgmstream_get_play_forever(vgmstream);
 
     while (!decode_abort) {
         int samples_to_do;
         int output_bytes;
 
-        if (decode_pos_samples + max_buffer_samples > length_samples
-                && (!loop_forever || !vgmstream->loop_flag))
+        if (decode_pos_samples + max_buffer_samples > length_samples && !play_forever)
             samples_to_do = length_samples - decode_pos_samples;
             if (samples_to_do < 0) /* just in case */
                 samples_to_do = 0;
