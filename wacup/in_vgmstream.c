@@ -50,10 +50,10 @@
 #include "resource.h"
 
 #ifndef VERSIONW
-#define VERSIONW L"2.3784"
+#define VERSIONW L"2.3793"
 #endif
 
-#define LIBVGMSTREAM_BUILD "1050-3784-gdeeb0b4e-wacup"
+#define LIBVGMSTREAM_BUILD "1050-3793-g4bd91df3-wacup"
 #define APP_NAME "vgmstream plugin"
 #define PLUGIN_DESCRIPTIONW L"vgmstream Decoder v" VERSIONW
 #define INI_NAME "plugin.ini"
@@ -561,7 +561,7 @@ INT_PTR CALLBACK configDlgProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lPara
 
 						CheckDlgButton(hDlg, IDC_TAGFILE_DISABLE, BST_UNCHECKED);
 
-			CheckDlgButton(hDlg, IDC_FORCE_TITLE, BST_UNCHECKED);
+						CheckDlgButton(hDlg, IDC_FORCE_TITLE, BST_UNCHECKED);
 
 						CheckDlgButton(hDlg, IDC_EXTS_UNKNOWN_ON, BST_UNCHECKED);
 						CheckDlgButton(hDlg, IDC_EXTS_COMMON_ON, BST_UNCHECKED);
@@ -1712,9 +1712,10 @@ extern "C" __declspec(dllexport) intptr_t winampGetExtendedRead_openW(const wcha
 	/*set_config_defaults(&ext_config);
 	apply_config(ext_vgmstream, &ext_config);*/
 
-	/* enable after all config but before outbuf (though ATM outbuf is not dynamic so no need to read input_channels) */
-	vgmstream_mixing_autodownmix(ext_vgmstream, downmix_channels);
-	vgmstream_mixing_enable(ext_vgmstream, SAMPLE_BUFFER_SIZE, NULL /*&input_channels*/, &ext_output_channels);
+	/* to make things simpler this will downmix the output so format conversion */
+	/* is more likely to work without it then affecting the waveform seeker output */
+	vgmstream_mixing_autodownmix(ext_vgmstream, ((*nch != 2) ? 2 : 0));
+	vgmstream_mixing_enable(ext_vgmstream, SAMPLE_BUFFER_SIZE, NULL, &ext_output_channels);
 
 	/* reset internals */
 	ext_seek_needed_samples = -1;
