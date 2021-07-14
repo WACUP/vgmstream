@@ -50,10 +50,10 @@
 #include "resource.h"
 
 #ifndef VERSIONW
-#define VERSIONW L"2.3803"
+#define VERSIONW L"2.3817"
 #endif
 
-#define LIBVGMSTREAM_BUILD "1050-3803-g79f81ac3-wacup"
+#define LIBVGMSTREAM_BUILD "1050-3817-g0d1a9faf-wacup"
 #define APP_NAME "vgmstream plugin"
 #define PLUGIN_DESCRIPTIONW L"vgmstream Decoder v" VERSIONW
 #define INI_NAME "plugin.ini"
